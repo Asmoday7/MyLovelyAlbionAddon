@@ -1,0 +1,222 @@
+{
+  "batch": 100,
+  "return_rate": 53.9,
+  "tax_pct": 0,
+  "station": 0,
+  "t3_price": 180,
+  "coefficient": 111,
+  "mode": "finite",
+  "rounding": "continuous",
+  "steps": 5,
+  "secondary_initial": 88,
+  "secondary_rate": 10,
+  "levels": {
+    "4": 100,
+    "5": 100,
+    "6": 100,
+    "7": 81,
+    "8": 74
+  },
+  "rows": [
+    {
+      "tier": 4,
+      "enchantment": 0,
+      "fiber": 125,
+      "cloth_buy": 340,
+      "sale": 288,
+      "legacy_focus": 971
+    },
+    {
+      "tier": 4,
+      "enchantment": 1,
+      "fiber": 160,
+      "cloth_buy": 430,
+      "sale": 378,
+      "legacy_focus": 1700
+    },
+    {
+      "tier": 4,
+      "enchantment": 2,
+      "fiber": 1300,
+      "cloth_buy": 2500,
+      "sale": 2070,
+      "legacy_focus": 2970
+    },
+    {
+      "tier": 4,
+      "enchantment": 3,
+      "fiber": 5000,
+      "cloth_buy": 8400,
+      "sale": 7280,
+      "legacy_focus": 5200
+    },
+    {
+      "tier": 4,
+      "enchantment": 4,
+      "fiber": 32000,
+      "cloth_buy": 43000,
+      "sale": 37900,
+      "legacy_focus": 8060
+    },
+    {
+      "tier": 5,
+      "enchantment": 0,
+      "fiber": 430,
+      "cloth_buy": 1200,
+      "sale": 1000,
+      "legacy_focus": 1700
+    },
+    {
+      "tier": 5,
+      "enchantment": 1,
+      "fiber": 700,
+      "cloth_buy": 2200,
+      "sale": 1955,
+      "legacy_focus": 2970
+    },
+    {
+      "tier": 5,
+      "enchantment": 2,
+      "fiber": 1300,
+      "cloth_buy": 4450,
+      "sale": 3900,
+      "legacy_focus": 5200
+    },
+    {
+      "tier": 5,
+      "enchantment": 3,
+      "fiber": 6800,
+      "cloth_buy": 22000,
+      "sale": 18410,
+      "legacy_focus": 7955
+    },
+    {
+      "tier": 5,
+      "enchantment": 4,
+      "fiber": 39500,
+      "cloth_buy": 116000,
+      "sale": 93500,
+      "legacy_focus": 12830
+    },
+    {
+      "tier": 6,
+      "enchantment": 0,
+      "fiber": 930,
+      "cloth_buy": 3600,
+      "sale": 3070,
+      "legacy_focus": 2630
+    },
+    {
+      "tier": 6,
+      "enchantment": 1,
+      "fiber": 1700,
+      "cloth_buy": 6300,
+      "sale": 5630,
+      "legacy_focus": 5200
+    },
+    {
+      "tier": 6,
+      "enchantment": 2,
+      "fiber": 6500,
+      "cloth_buy": 23100,
+      "sale": 19850,
+      "legacy_focus": 7330
+    },
+    {
+      "tier": 6,
+      "enchantment": 3,
+      "fiber": 27505,
+      "cloth_buy": 76500,
+      "sale": 68900,
+      "legacy_focus": 12828
+    },
+    {
+      "tier": 6,
+      "enchantment": 4,
+      "fiber": 111000,
+      "cloth_buy": 288000,
+      "sale": 275000,
+      "legacy_focus": 23323
+    },
+    {
+      "tier": 7,
+      "enchantment": 0,
+      "fiber": 1900,
+      "cloth_buy": 10400,
+      "sale": 9360,
+      "legacy_focus": 7015
+    },
+    {
+      "tier": 7,
+      "enchantment": 1,
+      "fiber": 5150,
+      "cloth_buy": 23100,
+      "sale": 20750,
+      "legacy_focus": 10189
+    },
+    {
+      "tier": 7,
+      "enchantment": 2,
+      "fiber": 18000,
+      "cloth_buy": 77450,
+      "sale": 68070,
+      "legacy_focus": 43810
+    },
+    {
+      "tier": 7,
+      "enchantment": 3,
+      "fiber": 72000,
+      "cloth_buy": 241000,
+      "sale": 214000,
+      "legacy_focus": 12000
+    },
+    {
+      "tier": 7,
+      "enchantment": 4,
+      "fiber": 280000,
+      "cloth_buy": 905000,
+      "sale": 810000,
+      "legacy_focus": 56730
+    },
+    {
+      "tier": 8,
+      "enchantment": 0,
+      "fiber": 7800,
+      "cloth_buy": 34000,
+      "sale": 30470,
+      "legacy_focus": 17880
+    },
+    {
+      "tier": 8,
+      "enchantment": 1,
+      "fiber": 21300,
+      "cloth_buy": 84000,
+      "sale": 77000,
+      "legacy_focus": 20000
+    },
+    {
+      "tier": 8,
+      "enchantment": 2,
+      "fiber": 71000,
+      "cloth_buy": 252000,
+      "sale": 223000,
+      "legacy_focus": 35080
+    },
+    {
+      "tier": 8,
+      "enchantment": 3,
+      "fiber": 250000,
+      "cloth_buy": 685000,
+      "sale": 640000,
+      "legacy_focus": 220235
+    },
+    {
+      "tier": 8,
+      "enchantment": 4,
+      "fiber": 900000,
+      "cloth_buy": 3500000,
+      "sale": 3060000,
+      "legacy_focus": 107430
+    }
+  ]
+}

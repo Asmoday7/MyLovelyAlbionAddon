@@ -12,7 +12,15 @@ COLUMNS = ("item_id", "name_ru", "name_en", "server", "location_id", "quality", 
 
 
 def records(rows):
+    expanded=[]
     for row in rows:
+        if len(row.get('by_quality',[]))>1:
+            for q in row['by_quality']:
+                sell,buy=q['quotes'].get('sell_price_min'),q['quotes'].get('buy_price_max')
+                spread=sell['price']-buy['price'] if sell and buy else None
+                expanded.append({**row,**q,'spread':spread,'spread_pct':100*spread/buy['price'] if spread is not None else None})
+        else:expanded.append(row)
+    for row in expanded:
         sell, buy = row["quotes"].get("sell_price_min", {}), row["quotes"].get("buy_price_max", {})
         result = dict(zip(COLUMNS[:9], [row["id"], row["name_ru"], row["name_en"], row["server"], row["location"],
                                        row["quality"], row["tier"], row["enchantment"], row["category"]]))

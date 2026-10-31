@@ -6,7 +6,7 @@ import re
 import uuid
 from .catalog import ingredient_id
 from .domain import region, location, number, utcnow, MARKETS
-from .analytics import SCOPES
+from .analytics import SCOPES, qualities, fallback_quotes
 
 
 def family(uid):
@@ -53,8 +53,9 @@ def config(body):
         raise ValueError('Выберите предмет из списка')
     units = number(body.get('units',1),1,1000000)
     variant = number(body.get('variant',0),0,1000)
-    output_quality = number(body.get('output_quality',1),1,5)
-    if any(x != int(x) for x in (units,variant,output_quality)):
+    output_quality = body.get('output_quality',1)
+    output_quality = 'auto' if str(output_quality) in ('auto','all') else number(output_quality,1,5)
+    if any(x != int(x) for x in (units,variant)) or (output_quality!='auto' and output_quality!=int(output_quality)):
         raise ValueError('Количество, вариант и качество должны быть целыми')
     city, sale = location(body.get('city','1002')), location(body.get('sale_city',body.get('city','1002')))
     if city not in MARKETS or city == '3003' or sale not in MARKETS:
@@ -62,7 +63,7 @@ def config(body):
     scope = body.get('scope','all')
     if scope != 'all' and scope not in SCOPES:
         raise ValueError('Неизвестный источник цен')
-    return {'item_id':uid,'units':int(units),'variant':int(variant),'output_quality':int(output_quality),
+    return {'item_id':uid,'units':int(units),'variant':int(variant),'output_quality':'auto' if output_quality=='auto' else int(output_quality),
             'city':city,'sale_city':sale,'server':region(body.get('server','east')),
             'scope':scope,'max_age_hours':number(body.get('max_age_hours',24),0,8760)}
 
@@ -139,7 +140,11 @@ def plan(store, body, now=None):
         fixed = Decimal(str(recipe['silver']))*operations
         complete = ready==len(rows)
         output_kind = 'buy_price_max' if cfg['sale_city']=='3003' else 'sell_price_min'
-        output_quote = quote(db,cfg,cfg['item_id'],cfg['sale_city'],cfg['output_quality'],output_kind,now)
+        output_options=[]
+        for q in qualities(cfg['output_quality']):
+            value=quote(db,cfg,cfg['item_id'],cfg['sale_city'],q,output_kind,now)
+            output_options.append({'quality':q,'quotes':{output_kind:value} if value else {}})
+        output_quote=fallback_quotes(output_options).get(output_kind)
         return {'config':cfg,'item':item_info(item,cfg['item_id']),'variants':variants(db,family(cfg['item_id'])),
                 'recipe_variants':[{'variant':r['variant'],'output':r['output']} for r in recipes],
                 'operations':operations,'produced':n(produced),'overproduction':n(produced-Decimal(cfg['units'])),
@@ -148,7 +153,7 @@ def plan(store, body, now=None):
                 'recipe_silver':n(fixed),'base_batch_cost':n(known+fixed) if complete else None,
                 'base_unit_cost':n((known+fixed)/produced) if complete else None,
                 'base_focus_per_operation':recipe['focus'],
-                'output_market':{'quote':output_quote,'kind':output_kind,'quality':cfg['output_quality'],'location':cfg['sale_city']},
+                'output_market':{'quote':output_quote,'by_quality':output_options,'kind':output_kind,'quality':cfg['output_quality'],'location':cfg['sale_city']},
                 'catalogue_at':item['catalog_at'],
                 'cost_basis':'gross inputs + recipe silver; no returns, station, transport or sales fees; depth unknown'}
 
@@ -188,14 +193,14 @@ def refresh(client, body):
         raise ValueError('Выбраны только свои наблюдения. Общие цены загружаются отдельно')
     groups=defaultdict(list)
     for r in computed['resources']:
-        groups[(r['location'],1)].append(r['id'])
+        groups[(r['location'],(1,))].append(r['id'])
     cfg=computed['config']
-    groups[(cfg['sale_city'],cfg['output_quality'])].append(cfg['item_id'])
+    groups[(cfg['sale_city'],tuple(qualities(cfg['output_quality'])))].append(cfg['item_id'])
     total={'prices':0,'history':0}
     for (city,q),ids in groups.items():
         ids=list(dict.fromkeys(ids))
         for offset in range(0,len(ids),100):
-            counts=refresh_market(client,ids[offset:offset+100],cfg['server'],[city],[q])
+            counts=refresh_market(client,ids[offset:offset+100],cfg['server'],[city],list(q))
             for key in total:
                 total[key]+=counts[key]
     return total

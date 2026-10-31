@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler
 from .server_socket import LoopbackHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from . import __version__, analytics, ingestion, crafting
+from . import __version__, analytics, ingestion, crafting, history_view, refining
 from .domain import SERVERS, MARKETS, quality, region, location
 from .export import csv_bytes, xlsx_bytes
 from .transport import HttpClient, sync_catalog, refresh_market
@@ -123,6 +123,12 @@ def make_server(store, port=8765):
                 elif path == "/api/market":
                     self.respond(analytics.market(store, query, min(max(int(query.get("limit", 50)), 1), 200),
                                                   max(int(query.get("offset", 0)), 0)))
+                elif path == "/api/cloth":
+                    self.respond(refining.load(store))
+                elif path == "/api/cloth/export.xlsx":
+                    self.respond(refining.workbook(refining.load(store)["config"]),content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",filename="Cloth-Calculator.xlsx")
+                elif path == "/api/history":
+                    self.respond(history_view.series(store,query))
                 elif path == "/api/craft/search":
                     self.respond(crafting.search(store,query.get('search','')))
                 elif path == "/api/craft/packs":
@@ -133,7 +139,7 @@ def make_server(store, port=8765):
                     uid = query.get("id", "")
                     records = []
                     for city in MARKETS:
-                        data = analytics.market(store, {**query, "search": uid, "city": city}, 100)
+                        data = analytics.market(store, {**query, "search": uid, "city": city, "quality":"all"}, 100)
                         records.extend(r for r in data["rows"] if r["id"] == uid)
                     with store.connect() as db:
                         recipes = [dict(r) for r in db.execute("SELECT * FROM recipes WHERE item_id=? ORDER BY variant", (uid,))]
@@ -156,7 +162,7 @@ def make_server(store, port=8765):
                             source.backup(target)
                         self.respond(p.read_bytes(), content_type="application/vnd.sqlite3", filename="trade-desk-backup.sqlite3")
                 else:
-                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/styles.css": "styles.css"}.get(path)
+                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/market_view.js":"market_view.js", "/quality.js":"quality.js", "/cloth.js":"cloth.js", "/styles.css": "styles.css"}.get(path)
                     if name:
                         self.respond((STATIC / name).read_bytes(), content_type=(mimetypes.guess_type(name)[0] or "text/plain") + "; charset=utf-8")
                     else:
@@ -180,7 +186,15 @@ def make_server(store, port=8765):
                 if not isinstance(body, dict):
                     raise ValueError("Тело запроса должно быть JSON-объектом")
                 path = urlsplit(self.path).path
-                if path == "/api/craft/plan":
+                if path == "/api/cloth/calculate":
+                    self.respond(refining.calculate(body))
+                elif path == "/api/cloth/save":
+                    self.respond(refining.save(store,body))
+                elif path == "/api/history/refresh":
+                    history_view.bounds(body)
+                    if body.get("scope")=="private":raise ValueError("Используйте локальные наблюдения")
+                    self.respond(jobs.submit(lambda: history_view.refresh(client,body),"history"),202)
+                elif path == "/api/craft/plan":
                     self.respond(crafting.plan(store,body))
                 elif path == "/api/craft/packs":
                     self.respond(crafting.save(store,body))

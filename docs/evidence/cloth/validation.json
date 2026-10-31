@@ -1,0 +1,55 @@
+{
+  "cases": [
+    {
+      "config": {},
+      "formulas_compared": 7780
+    },
+    {
+      "config": {
+        "batch": 77,
+        "return_rate": 50,
+        "tax_pct": 6.5,
+        "station": 8,
+        "steps": 7,
+        "levels": {
+          "4": 20,
+          "5": 50,
+          "6": 10,
+          "7": 81,
+          "8": 74
+        }
+      },
+      "formulas_compared": 7780
+    },
+    {
+      "config": {
+        "batch": 77,
+        "return_rate": 53.9,
+        "steps": 5,
+        "rounding": "integer"
+      },
+      "formulas_compared": 7780
+    },
+    {
+      "config": {
+        "batch": 1,
+        "return_rate": 0,
+        "steps": 0
+      },
+      "formulas_compared": 7780
+    }
+  ],
+  "mismatches": [],
+  "source_sha256": "da23d3a5be5ac0dfda2613d99e1762468142a41d4254ac82d9ba2b8b285eddca",
+  "source_formulas": 250,
+  "source_recalculation_errors": 0,
+  "archive_changed_cells": [],
+  "user_model": {
+    "return_rate": 53.9,
+    "initial": 100,
+    "additional_repeats": 5,
+    "output": 211.6007191767699,
+    "focus_T8_2": 35079.16722512491
+  },
+  "validation": "LibreOffice independent recalculation; scenario calculations, not verified game mechanics"
+}
