@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler
 from .server_socket import LoopbackHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from . import __version__, analytics, ingestion
+from . import __version__, analytics, ingestion, crafting
 from .domain import SERVERS, MARKETS, quality, region, location
 from .export import csv_bytes, xlsx_bytes
 from .transport import HttpClient, sync_catalog, refresh_market
@@ -123,6 +123,12 @@ def make_server(store, port=8765):
                 elif path == "/api/market":
                     self.respond(analytics.market(store, query, min(max(int(query.get("limit", 50)), 1), 200),
                                                   max(int(query.get("offset", 0)), 0)))
+                elif path == "/api/craft/search":
+                    self.respond(crafting.search(store,query.get('search','')))
+                elif path == "/api/craft/packs":
+                    self.respond(crafting.saved(store))
+                elif path == "/api/craft/pack":
+                    self.respond(crafting.load(store,query.get('id','')))
                 elif path == "/api/item":
                     uid = query.get("id", "")
                     records = []
@@ -150,7 +156,7 @@ def make_server(store, port=8765):
                             source.backup(target)
                         self.respond(p.read_bytes(), content_type="application/vnd.sqlite3", filename="trade-desk-backup.sqlite3")
                 else:
-                    name = {"/": "index.html", "/app.js": "app.js", "/styles.css": "styles.css"}.get(path)
+                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/styles.css": "styles.css"}.get(path)
                     if name:
                         self.respond((STATIC / name).read_bytes(), content_type=(mimetypes.guess_type(name)[0] or "text/plain") + "; charset=utf-8")
                     else:
@@ -174,7 +180,21 @@ def make_server(store, port=8765):
                 if not isinstance(body, dict):
                     raise ValueError("Тело запроса должно быть JSON-объектом")
                 path = urlsplit(self.path).path
-                if path == "/api/private/start":
+                if path == "/api/craft/plan":
+                    self.respond(crafting.plan(store,body))
+                elif path == "/api/craft/packs":
+                    self.respond(crafting.save(store,body))
+                elif path == "/api/craft/delete":
+                    with store.connect() as db:
+                        db.execute('DELETE FROM craft_packs WHERE id=?',(str(body['id']),))
+                    self.respond({'ok':True})
+                elif path == "/api/craft/refresh":
+                    # Validate the actual recipe before queueing any network work.
+                    cfg=crafting.plan(store,body)['config']
+                    if cfg['scope']=='private':
+                        raise ValueError('Для собственных цен используйте локальный сканер. Общие цены — отдельный источник')
+                    self.respond(jobs.submit(lambda: crafting.refresh(client,cfg),'craft'),202)
+                elif path == "/api/private/start":
                     self.respond(private.start(body.get("server", "east"), body.get("experimental_ack")))
                 elif path == "/api/private/stop":
                     self.respond(private.stop())

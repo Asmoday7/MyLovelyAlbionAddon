@@ -1,4 +1,6 @@
+import {createCrafting} from './crafting.js';
 const $ = id => document.getElementById(id);
+let crafting = null;
 const fmt = value => value == null ? '—' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1}).format(value);
 const date = value => value ? new Date(value * 1000).toLocaleString('ru-RU') : 'нет данных';
 const state = {offset: 0, limit: 50, rows: [], selected: new Set(), sort: 'name', direction: 'asc', total: 0, catalog: null, busy: false, activeJob: null, privateEnabled: false};
@@ -61,7 +63,13 @@ function renderRows() {
     fetchPrice.disabled = state.busy || $('scope').value === 'private';
     fetchPrice.setAttribute('aria-label', `Узнать цену: ${item.name_ru}`);
     fetchPrice.onclick = async () => { try { await refresh([item.id]); } catch (error) { showError(error); } };
-    cell(tr).append(fetchPrice);
+    const actions=el('div',null,'item-actions');actions.append(fetchPrice);
+    if (item.has_recipe) {
+      const pack=el('button','В набор для крафта','quiet');
+      pack.onclick=()=>{showView('craft',true);crafting.openItem(item.id,Number($('quality').value)).catch(showError);};
+      actions.append(pack);
+    }
+    cell(tr).append(actions);
     $('rows').append(tr);
   }
   $('empty').hidden = state.rows.length > 0; $('total-badge').textContent = fmt(state.total);
@@ -100,7 +108,7 @@ function renderOnboarding() {
     $(id).classList.toggle('done', Boolean(done)); $(id).classList.toggle('current', Boolean(current && !done));
   }
   $('private-filter-note').hidden = $('scope').value !== 'private';
-  const applied = ['tier', 'enchantment', 'category'].filter(k => $(k).value).length + Number($('favorites').checked) + Number($('priced').checked) + Number($('scope').value !== 'all');
+  const applied = Number(Boolean($('category').value)) + Number($('favorites').checked) + Number($('priced').checked);
   $('filters-summary').textContent = applied ? `Дополнительные фильтры · применено ${applied}` : 'Дополнительные фильтры';
 }
 async function load() {
@@ -134,6 +142,7 @@ async function status() {
   $('saved-filters').replaceChildren(new Option('Выберите профиль', ''));
   for (const [name, f] of Object.entries(data.filters)) { const option = new Option(name, name); option.dataset.filters = JSON.stringify(f); $('saved-filters').add(option); }
   renderOnboarding();
+  crafting?.updateContext(data);
   if (data.active_job && !state.activeJob) trackJob(data.active_job).catch(showError);
   return data;
 }
@@ -162,12 +171,13 @@ async function trackJob(started) {
     let result;
     do { await new Promise(resolve => setTimeout(resolve, 800)); result = await api(`/api/jobs/${started.id}`); } while (['queued', 'running'].includes(result.status));
     await status(); await load();
+    if (!$('craft-view').hidden) await crafting?.refresh();
     if (result.status !== 'done') {
       const error = new Error(catalog ? 'Не удалось загрузить список предметов. Проверьте подключение к Интернету и повторите загрузку. Точный текст ошибки можно раскрыть ниже.' : 'Не удалось завершить загрузку цен. Уже полученные данные сохранены. Проверьте Интернет; точный текст ошибки можно раскрыть ниже.');
       error.detail = result.error || result.status; throw error;
     }
     if (catalog) notice(`Список готов: ${fmt(result.result.items)} предметов. Теперь выберите пример или введите название в поиск ниже.`);
-    else notice(result.result.prices ? `Получено ценовых наблюдений: ${fmt(result.result.prices)}. Исторических интервалов: ${fmt(result.result.history)}. Цены показаны в таблице.` : 'Запрос выполнен, но источник пока не сообщил цен для выбранных условий. Попробуйте другой город или качество. «Нет цены» не означает нулевую стоимость.');
+    else notice(result.result.prices ? `Получено ценовых наблюдений: ${fmt(result.result.prices)}. Исторических интервалов: ${fmt(result.result.history)}. ${started.kind==='craft'?'Цены набора обновлены в списке материалов.':'Цены показаны в таблице.'}` : 'Запрос выполнен, но источник пока не сообщил цен для выбранных условий. Попробуйте другой город или качество. «Нет цены» не означает нулевую стоимость.');
   } finally { state.activeJob = null; setBusy(false); }
 }
 async function job(path, body) {
@@ -184,7 +194,7 @@ async function refresh(items = [...state.selected]) {
   await job('/api/market/refresh', {items, server: $('server').value, cities: [$('city').value], qualities: [Number($('quality').value)]});
 }
 function bind(id, action) { $(id).addEventListener('click', async () => { try { await action(); } catch (error) { showError(error); } }); }
-function showView(name) {
+function showView(name,skipCraft=false) {
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `${name}-view`;
   for (const nav of document.querySelectorAll('.nav')) nav.classList.toggle('active', nav.dataset.view === name);
   const nav = document.querySelector(`[data-view="${name}"]`);
@@ -192,6 +202,7 @@ function showView(name) {
   if (nav?.closest('.nav-more')) $('nav-more').open = true;
   $('notice').hidden = true; $('error-details').hidden = true;
   status().catch(showError);
+  if (name==='craft'&&!skipCraft) crafting?.open().catch(showError);
 }
 for (const button of document.querySelectorAll('[data-view]')) button.onclick = () => showView(button.dataset.view);
 for (const key of keys.filter(k => k !== 'search')) $(key).addEventListener('change', async () => { state.offset = 0; state.selected.clear(); try { await load(); } catch (e) { showError(e); } });
@@ -270,9 +281,11 @@ async function init() {
   await status();
   try { const saved = localStorage.getItem('albion-filters'); if (saved) applyFilters(JSON.parse(saved)); $('language').value = localStorage.getItem('albion-language') || 'ru'; }
   catch { /* Ignore malformed browser preferences; network/data errors are displayed. */ }
-  if (['tier', 'enchantment', 'category'].some(k => $(k).value) || $('favorites').checked || $('priced').checked || $('scope').value !== 'all') $('extra-filters').open = true;
+  if ($('category').value || $('favorites').checked || $('priced').checked) $('extra-filters').open = true;
   await load();
 }
+crafting=createCrafting({api,fmt,date,el,notice,showError,job,showView,catalog:()=>state.catalog,
+  initialCity:()=>$('city').value,initialScope:()=>$('scope').value,maxAge:()=>$('max_age_hours').value});
 init().catch(showError);
 setInterval(async () => {
   if (document.hidden || state.polling) return;

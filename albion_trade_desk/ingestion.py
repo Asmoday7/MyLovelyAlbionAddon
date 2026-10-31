@@ -82,7 +82,7 @@ def local_orders(store, payload, server="east", source="data-client", scaled=Tru
                 raise ValueError("Неизвестный AuctionType")
             uid = str(row["ItemTypeId"])
             enchant = int(number(row.get("EnchantmentLevel", 0), maximum=4))
-            if enchant and "@" not in uid and "_LEVEL" not in uid:
+            if enchant and "@" not in uid:
                 uid += f"@{enchant}"
             price = number(row["UnitPriceSilver"]) / (10000 if scaled else 1)
             amount = int(number(row["Amount"]))

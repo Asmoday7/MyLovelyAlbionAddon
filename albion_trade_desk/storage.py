@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS native_history (
  quality INTEGER NOT NULL, timescale INTEGER NOT NULL, ticks INTEGER NOT NULL,
  quantity INTEGER NOT NULL, silver REAL NOT NULL, received_at REAL NOT NULL, source TEXT NOT NULL,
  PRIMARY KEY(server,location,numeric_id,quality,timescale,ticks,source));
+CREATE TABLE IF NOT EXISTS craft_packs (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, config TEXT NOT NULL,
+ created_at REAL NOT NULL, updated_at REAL NOT NULL);
 """
 
 

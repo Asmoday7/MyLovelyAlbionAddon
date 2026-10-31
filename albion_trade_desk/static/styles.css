@@ -219,3 +219,138 @@ dialog::backdrop { background: #59463e55; backdrop-filter: blur(4px); }
   .stats { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Comfortable default scale; browser zoom is not needed for ordinary use. */
+body { font-size: 17px; line-height: 1.6; }
+.sidebar { width: 254px; }
+main { margin-left: 254px; padding-left: 30px; padding-right: 30px; max-width: none; }
+button { font-size: 16px; min-height: 46px; padding: 10px 17px; }
+input, select { font-size: 16px; min-height: 46px; }
+h1 { font-size: clamp(32px, 3vw, 42px); }
+h2 { font-size: 22px; }
+.nav { font-size: 16px; padding: 13px 11px; }
+.nav-caption, .eyebrow { font-size: 11px; }
+.nav-more summary, .sidebar-note, .sidebar-note .quiet, .topbar { font-size: 13px; }
+.server-label select { font-size: 16px; }
+.subtitle, .panel p { font-size: 16px; }
+.quiet, .caveat, .metric-explainer, .footnotes { font-size: 14px; }
+.check { font-size: 14px; }
+input[type=checkbox] { width: 20px; height: 20px; min-height: 20px; flex-basis: 20px; }
+.onboarding p, .onboarding.ready p { font-size: 15px; }
+.onboarding.ready h2, .onboarding h2 { font-size: 25px; }
+.steps strong { font-size: 15px; }
+.steps small { font-size: 12px; }
+.table-title h2 { font-size: 21px; }
+.table-title button, .table-footer .primary { font-size: 15px; }
+.basic-filters .search-label { flex-basis: 100%; }
+.filters>label:not(.check):not(.search-label), .extra-filters summary { font-size: 13px; }
+.filters select, .search-label input { font-size: 16px; }
+.table-options, .table-footer { font-size: 14px; }
+th { font-size: 13px; }
+td { font-size: 16px; padding-top: 17px; padding-bottom: 17px; }
+.item-open { font-size: 17px; max-width: 380px; }
+.item-id, .price-origin, .table-footer small { font-size: 12px; }
+.no-data, .row-refresh { font-size: 14px; }
+.row-refresh { min-height: 42px; }
+.badge { font-size: 13px; }
+.item-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.item-actions .quiet { background: #faedf3; border-color: #edd7e1; }
+.craft-search-row { display: flex; gap: 14px; align-items: end; margin-top: 18px; }
+.craft-search-row>label { flex: 1; margin: 0; }
+.craft-search-row input { display: block; width: 100%; margin-top: 6px; }
+.craft-search-results { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+.craft-search-results button { text-align: left; max-width: 100%; white-space: normal; }
+.craft-search-results button.active { background: #f7e2d1; border-color: #dbb798; }
+.craft-search-results small { display: block; font-size: 13px; font-weight: 400; }
+.craft-controls { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin-top: 23px; }
+.craft-controls label { display: flex; flex-direction: column; gap: 7px; margin: 0; font-size: 14px; color: var(--muted); }
+.craft-controls select, .craft-controls input { width: 100%; }
+.craft-context { padding-top: 20px; border-top: 1px solid var(--line); }
+.craft-section-heading, .craft-plan-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.craft-section-heading p, .craft-plan-heading p { margin: 6px 0 0; }
+.craft-plan-heading { margin: 25px 0 20px; }
+.craft-plan-heading h2 { font-size: 26px; }
+.craft-save-actions, .craft-toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
+.craft-pack-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+.craft-pack-list button { max-width: 100%; text-align: left; white-space: normal; }
+.craft-pack-list button.active { background: #fae7ee; border-color: #dba9bf; }
+.craft-pack-list small { display: block; font-size: 13px; }
+.craft-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 17px; margin-bottom: 23px; }
+.craft-summary article { padding: 23px; border: 1px solid var(--line); border-radius: 15px; background: #fff; }
+.craft-summary article:first-child { background: #fbeadf; }
+.craft-summary article:nth-child(2) { background: #f9ebf0; }
+.craft-summary span { font-size: 15px; color: var(--muted); }
+.craft-summary strong { display: block; font-size: 29px; line-height: 1.3; margin: 13px 0 8px; }
+.craft-summary small { font-size: 13px; display: block; }
+.craft-checklist .craft-section-heading label { margin: 0; font-size: 14px; }
+.craft-checklist .craft-section-heading label select { display: block; margin-top: 5px; }
+.craft-toolbar { margin-top: 24px; }
+.craft-flow-hint { padding: 14px 16px; border-radius: 10px; background: #fff6ee; color: #966648 !important; font-size: 14px !important; }
+.craft-resources { display: grid; gap: 12px; margin-top: 20px; }
+.craft-resource { display: grid; grid-template-columns: minmax(240px,1.6fr) 90px minmax(180px,1fr) auto; gap: 17px; align-items: center; padding: 19px; border: 1px solid var(--line); border-radius: 12px; background: #fffdfa; }
+.craft-resource.focused { border-color: #cb926c; background: #fff1e4; }
+.craft-resource.ready { border-left: 4px solid #9eb497; }
+.craft-resource .resource-name { font-size: 18px; font-weight: 650; }
+.craft-resource small { display: block; font-size: 13px; margin-top: 3px; overflow-wrap: anywhere; }
+.craft-resource .resource-qty { font-size: 27px; font-weight: 650; color: #a46943; }
+.craft-resource .resource-price { font-size: 20px; font-weight: 600; }
+.craft-resource .resource-state { font-size: 14px; display: block; }
+.craft-resource .resource-state.ready { color: #517849; }
+.craft-resource .resource-state.stale { color: #a26b35; }
+.craft-resource button { white-space: nowrap; }
+.craft-output-heading { margin: 25px 0 16px; }
+.craft-output-heading h3 { font-size: 20px; margin-bottom: 5px; }
+#copy-text { width: 100%; padding: 12px; font: inherit; margin-bottom: 15px; }
+@media(min-width:1350px) {
+  .craft-layout { display: grid; grid-template-columns: 350px minmax(0,1fr); gap: 22px; align-items: start; }
+  .craft-builder, .craft-saved { padding: 21px; }
+  .craft-editor .craft-search-row { flex-wrap: wrap; gap: 8px; }
+  .craft-editor .craft-search-row>label { flex-basis: 100%; }
+  .craft-editor .craft-controls { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+  .craft-editor .craft-controls label { font-size: 13px; }
+  .craft-editor .craft-controls select { padding-left: 8px; padding-right: 5px; }
+  .craft-editor .craft-context>label:nth-child(3) { grid-column: 1/-1; }
+  .craft-editor .craft-context>label:nth-child(4) { grid-column: 1/-1; }
+  .craft-plan-heading { flex-wrap: wrap; margin-top: 0; }
+  .craft-plan-heading h2 { font-size: 25px; }
+  .craft-summary { gap: 10px; }
+  .craft-summary article { padding: 14px; }
+  .craft-summary strong { font-size: 25px; margin: 7px 0 4px; }
+  .craft-summary span { font-size: 14px; }
+  .craft-checklist { padding: 20px; }
+  .craft-checklist .craft-section-heading { align-items: start; }
+  .craft-checklist .craft-section-heading p { font-size: 15px; }
+  .craft-resource { grid-template-columns: minmax(0,1.5fr) 55px minmax(0,1fr) auto; padding: 14px; gap: 12px; }
+  .craft-resource button { padding-left: 12px; padding-right: 12px; }
+  .craft-resource .resource-name { font-size: 17px; }
+  .craft-resource .resource-price { font-size: 18px; }
+}
+@media(max-width:1200px) {
+  .sidebar { width: 232px; }
+  main { margin-left: 232px; padding-left: 22px; padding-right: 22px; }
+  .nav { font-size: 14px; }
+  .craft-resource { grid-template-columns: minmax(190px,1fr) 80px minmax(150px,1fr); }
+  .craft-resource button { grid-column: 1/-1; justify-self: start; }
+  .craft-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:850px) {
+  .craft-summary { grid-template-columns: 1fr; }
+  .craft-section-heading, .craft-plan-heading { align-items: start; flex-direction: column; }
+  .craft-search-row { flex-wrap: wrap; }
+}
+@media(max-width:700px) {
+  .sidebar { width: 100%; }
+  main { margin-left: 0; padding-left: 15px; padding-right: 15px; }
+  .nav { font-size: 14px; }
+  .server-label { flex-wrap: wrap; font-size: 13px; }
+  .craft-resource { grid-template-columns: minmax(0,1fr) 65px; padding: 14px; gap: 12px; }
+  .craft-resource>div:nth-child(3) { grid-column: 1/-1; }
+  .craft-resource button { white-space: normal; }
+  .craft-controls { gap: 12px; }
+  .craft-toolbar { flex-direction: column; }
+  .craft-toolbar button { width: 100%; }
+  .craft-resource .resource-name { font-size: 17px; }
+  .onboarding.ready, .onboarding { padding: 20px; }
+  .steps { flex-direction: column; }
+  .steps strong { font-size: 14px; }
+}

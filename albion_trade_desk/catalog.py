@@ -11,6 +11,18 @@ def many(value):
     return value if isinstance(value, list) else [value] if value else []
 
 
+def ingredient_id(db, uid, enchantment=None):
+    """Canonical dump identity, including e.g. T4_PLANKS_LEVEL1@1, never a base-tier guess."""
+    if enchantment is not None and int(enchantment) > 0 and "@" not in uid:
+        return uid + "@" + str(int(enchantment))
+    if db.execute("SELECT 1 FROM items WHERE id=?", (uid,)).fetchone():
+        return uid
+    # Repairs old stored recipes that lost @enchantmentlevel. Resolve only a
+    # unique existing catalogue ID; ambiguous/missing identities stay explicit.
+    rows = db.execute("SELECT id FROM items WHERE substr(id,1,?)=? LIMIT 2", (len(uid)+1, uid+'@')).fetchall()
+    return rows[0]["id"] if len(rows) == 1 else uid
+
+
 def import_catalog(store, names, raw=None):
     if not isinstance(names, list) or not names or not all("UniqueName" in i for i in names):
         raise ValueError("Ожидается formatted/items.json из ao-bin-dumps")
@@ -53,7 +65,7 @@ def import_recipes(db, raw):
                                         "upgrade": data.get("upgraderequirements")}, ensure_ascii=False), uid))
                 db.execute("DELETE FROM recipes WHERE item_id=?", (uid,))
                 for variant, recipe in enumerate(many(data.get("craftingrequirements"))):
-                    resources = [{"item_id": r["@uniquename"], "count": number(r["@count"]),
+                    resources = [{"item_id": ingredient_id(db, r["@uniquename"], r.get("@enchantmentlevel")), "count": number(r["@count"]),
                                   "returnable": r.get("@maxreturnamount") != "0"}
                                  for r in many(recipe.get("craftresource"))]
                     if resources:

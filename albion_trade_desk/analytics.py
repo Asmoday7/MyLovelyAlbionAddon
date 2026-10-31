@@ -78,7 +78,8 @@ def market(store, filters=None, limit=50, offset=0, now=None):
     where = " AND ".join(clauses)
     with store.connect() as db:
         total = db.execute(f"SELECT COUNT(*) FROM items i WHERE {where}", params).fetchone()[0]
-        items = [dict(r) for r in db.execute(f"""SELECT i.*,EXISTS(SELECT 1 FROM favorites WHERE item_id=i.id) favorite
+        items = [dict(r) for r in db.execute(f"""SELECT i.*,EXISTS(SELECT 1 FROM favorites WHERE item_id=i.id) favorite,
+            EXISTS(SELECT 1 FROM recipes WHERE item_id=i.id) has_recipe
             FROM items i WHERE {where} ORDER BY {sort} {direction},i.id LIMIT ? OFFSET ?""", params + [limit, offset])]
         result = []
         for item in items:

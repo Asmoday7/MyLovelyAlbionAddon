@@ -27,7 +27,7 @@ const assert = require('node:assert/strict');
     const download = await downloading;
     assert.equal(download.suggestedFilename(), 'MarketPrices.xlsx');
     if (process.env.ALBION_ARTIFACT_DIR) await download.saveAs(process.env.ALBION_ARTIFACT_DIR + '/market.xlsx');
-    await page.locator('#nav-more summary').click();
+    if (!await page.locator('#nav-more').evaluate(node => node.open)) await page.locator('#nav-more summary').click();
     await page.locator('[data-view="sources"]').click();
     assert.match(await page.locator('#nats-state').textContent(), /Выключен/);
     await page.locator('[data-view="private"]').click();
