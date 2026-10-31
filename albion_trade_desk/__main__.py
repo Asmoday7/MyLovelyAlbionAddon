@@ -20,7 +20,10 @@ def main():
     try:
         if args.command == "serve":
             from .web import make_server
-            server = make_server(store, args.port)
+            from .server_socket import available_server
+            server = available_server(lambda port: make_server(store, port), args.port)
+            if args.port and server.server_port != args.port:
+                print(f"Порт {args.port} недоступен. Выбран свободный порт {server.server_port}.", flush=True)
             address = f"http://127.0.0.1:{server.server_port}"
             print("Albion Trade Desk: " + address, flush=True)
             if args.open:

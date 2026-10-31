@@ -6,7 +6,8 @@ import tempfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+from .server_socket import LoopbackHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from . import __version__, analytics, ingestion
@@ -202,6 +203,6 @@ def make_server(store, port=8765):
                 LOG.exception("Mutation failed")
                 self.respond({"error": "Внутренняя ошибка; подробности в журнале сервера"}, 500)
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = LoopbackHTTPServer(("127.0.0.1", port), Handler)
     server.jobs = jobs
     return server
