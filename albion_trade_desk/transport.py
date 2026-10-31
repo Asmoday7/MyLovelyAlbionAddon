@@ -104,7 +104,10 @@ def batches(server, kind, ids, cities, qualities, extra=None):
 
 
 def sync_catalog(client):
-    return {"items": import_catalog(client.store, client.get(CATALOG_URL, 3600), client.get(RECIPES_URL, 3600))}
+    count = import_catalog(client.store, client.get(CATALOG_URL, 3600), client.get(RECIPES_URL, 3600))
+    from .feeds import resolve_history
+    resolve_history(client.store)
+    return {"items": count}
 
 
 def refresh_market(client, ids, server, cities, qualities):

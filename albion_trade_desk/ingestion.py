@@ -59,7 +59,7 @@ def history(store, payload, server="east", seconds=3600, source="aodp-rest"):
                 if int(qty) != qty:
                     raise ValueError("Объём должен быть целым")
                 db.execute("""INSERT INTO history VALUES(?,?,?,?,?,?,?,?,?,?)
-                    ON CONFLICT(server,location,item_id,quality,start,seconds) DO UPDATE SET
+                    ON CONFLICT(server,location,item_id,quality,start,seconds,source) DO UPDATE SET
                     quantity=excluded.quantity,average=excluded.average,
                     received_at=excluded.received_at,source=excluded.source""",
                            (server, location(row["location"]), row["item_id"], quality(row["quality"]),
@@ -69,7 +69,7 @@ def history(store, payload, server="east", seconds=3600, source="aodp-rest"):
     return count
 
 
-def local_orders(store, payload, server="east"):
+def local_orders(store, payload, server="east", source="data-client", scaled=True):
     region(server)
     now, groups, count = utcnow(), defaultdict(list), 0
     rows = payload["Orders"]
@@ -84,16 +84,16 @@ def local_orders(store, payload, server="east"):
             enchant = int(number(row.get("EnchantmentLevel", 0), maximum=4))
             if enchant and "@" not in uid and "_LEVEL" not in uid:
                 uid += f"@{enchant}"
-            price = number(row["UnitPriceSilver"]) / 10000
+            price = number(row["UnitPriceSilver"]) / (10000 if scaled else 1)
             amount = int(number(row["Amount"]))
             expires = timestamp(row["Expires"])
             city, q = location(row["LocationId"]), quality(row["QualityLevel"])
             if not city:
                 raise ValueError("LocationId обязателен")
-            db.execute("""INSERT INTO orders VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(server,id)
+            db.execute("""INSERT INTO orders VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(server,id,source)
                 DO UPDATE SET price=excluded.price,amount=excluded.amount,expires=excluded.expires,
                 received_at=excluded.received_at""",
-                       (server, str(row["Id"]), uid, city, q, side, price, amount, expires, now))
+                       (server, str(row["Id"]), uid, city, q, side, price, amount, expires, now, source))
             if expires > now and amount > 0 and price > 0:
                 groups[(city, uid, q, side)].append(price)
             count += 1
@@ -101,8 +101,8 @@ def local_orders(store, payload, server="east"):
             put_quote(db, server, city, uid, q,
                       "sell_price_min" if side == "offer" else "buy_price_max",
                       min(values) if side == "offer" else max(values), now, now,
-                      "data-client", "partial scan; observation time is local receipt; depth unknown")
-        event(db, server, "data-client", "orders", count)
+                      source, "partial scan; observation time is local receipt; depth unknown")
+        event(db, server, source, "orders", count)
     return count
 
 

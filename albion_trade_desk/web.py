@@ -14,6 +14,8 @@ from . import __version__, analytics, ingestion
 from .domain import SERVERS, MARKETS, quality, region, location
 from .export import csv_bytes, xlsx_bytes
 from .transport import HttpClient, sync_catalog, refresh_market
+from .private_scanner import PrivateScanner
+from .public_nats import PublicNats
 
 STATIC = Path(__file__).with_name("static")
 LOG = logging.getLogger(__name__)
@@ -54,10 +56,14 @@ class Jobs:
 
 def make_server(store, port=8765):
     jobs, client = Jobs(), HttpClient(store)
+    private, nats = None, PublicNats(store)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
-            LOG.info(format, *args)
+            if self.path.startswith('/private/'):
+                LOG.info("Private market receiver: HTTP %s", args[1] if len(args) > 1 else "request")
+            else:
+                LOG.info(format, *args)
 
         def respond(self, data, status=200, content_type="application/json; charset=utf-8", filename=None):
             body = json.dumps(data, ensure_ascii=False, allow_nan=False).encode() if isinstance(data, (dict, list)) else data
@@ -90,7 +96,19 @@ def make_server(store, port=8765):
                     with store.connect() as db:
                         categories = [r[0] for r in db.execute("SELECT DISTINCT category FROM items ORDER BY category")]
                     self.respond({**store.status(), "servers": list(SERVERS), "markets": MARKETS,
-                                  "version": __version__, "categories": categories, "filters": store.settings()})
+                                  "version": __version__, "categories": categories, "filters": store.settings(),
+                                  "private_scanner": private.status(), "public_nats": nats.status()})
+                elif path == "/api/private/status":
+                    self.respond(private.status())
+                elif path == "/api/private/launcher":
+                    self.respond(private.launcher(), content_type="application/octet-stream", filename="Start-PrivateScanner.ps1")
+                elif path == "/api/private/history":
+                    with store.connect() as db:
+                        rows = [dict(r) for r in db.execute("SELECT * FROM native_history WHERE source='private-client' ORDER BY received_at DESC LIMIT 200")]
+                        for row in rows:
+                            row['observed_at'] = (row['ticks'] - 621355968000000000) / 10000000
+                            row['ticks'] = str(row['ticks'])  # Exact .NET ticks exceed JavaScript integer precision.
+                    self.respond({"rows": rows, "limit": 200})
                 elif path == "/api/market":
                     self.respond(analytics.market(store, query, min(max(int(query.get("limit", 50)), 1), 200),
                                                   max(int(query.get("offset", 0)), 0)))
@@ -145,7 +163,20 @@ def make_server(store, port=8765):
                 if not isinstance(body, dict):
                     raise ValueError("Тело запроса должно быть JSON-объектом")
                 path = urlsplit(self.path).path
-                if path == "/api/catalog/sync":
+                if path == "/api/private/start":
+                    self.respond(private.start(body.get("server", "east"), body.get("experimental_ack")))
+                elif path == "/api/private/stop":
+                    self.respond(private.stop())
+                elif path == "/api/nats/start":
+                    self.respond(nats.start(body.get("server", "east")))
+                elif path == "/api/nats/stop":
+                    self.respond(nats.stop())
+                elif path.startswith("/private/"):
+                    parts = path.strip('/').split('/')
+                    if len(parts) != 4:
+                        raise ValueError("Неверный адрес приватной сессии")
+                    self.respond(private.receive(parts[1], parts[2], parts[3], body))
+                elif path == "/api/catalog/sync":
                     self.respond(jobs.submit(lambda: sync_catalog(client)), 202)
                 elif path == "/api/market/refresh":
                     ids = body["items"]
@@ -182,6 +213,8 @@ def make_server(store, port=8765):
                         db.execute("INSERT OR REPLACE INTO saved_filters VALUES(?,?)", (name, json.dumps(body["filters"])))
                     self.respond({"ok": True})
                 elif path.startswith("/ingest/"):
+                    if private.status()["enabled"]:
+                        raise PermissionError("Обычный ingest отключён во время приватной сессии")
                     parts = path.strip("/").split("/")
                     if len(parts) != 3:
                         raise ValueError("Ожидается /ingest/<server>/<topic>")
@@ -197,6 +230,8 @@ def make_server(store, port=8765):
                     self.respond({"imported": count})
                 else:
                     self.respond({"error": "Не найдено"}, 404)
+            except PermissionError as exc:
+                self.respond({"error": str(exc)}, 403)
             except (ValueError, KeyError, TypeError, OverflowError) as exc:
                 self.respond({"error": str(exc)}, 400)
             except Exception:
@@ -204,5 +239,7 @@ def make_server(store, port=8765):
                 self.respond({"error": "Внутренняя ошибка; подробности в журнале сервера"}, 500)
 
     server = LoopbackHTTPServer(("127.0.0.1", port), Handler)
+    private = PrivateScanner(store, server.server_port)
     server.jobs = jobs
+    server.private_scanner, server.public_nats = private, nats
     return server

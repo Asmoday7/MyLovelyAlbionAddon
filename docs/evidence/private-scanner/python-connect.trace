@@ -1,0 +1,63 @@
+9114  connect(4, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+9114  connect(4, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+9114  connect(5, {sa_family=AF_INET, sin_port=htons(32995), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9114  connect(5, {sa_family=AF_INET, sin_port=htons(32996), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+9117  +++ exited with 0 +++
+9114  <... connect resumed>)            = 0
+9118  +++ exited with 0 +++
+9116  +++ exited with 0 +++
+9115  +++ exited with 0 +++
+9114  connect(5, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9114  connect(3, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9120  +++ exited with 0 +++
+9121  +++ exited with 0 +++
+9114  connect(3, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9114  connect(3, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+9122  +++ exited with 0 +++
+9114  <... connect resumed>)            = 0
+9114  connect(3, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9123  +++ exited with 0 +++
+9124  +++ exited with 0 +++
+9114  connect(3, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9114  connect(6, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9125  +++ exited with 0 +++
+9126  +++ exited with 0 +++
+9114  connect(3, {sa_family=AF_INET, sin_port=htons(40561), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9127  +++ exited with 0 +++
+9119  +++ exited with 0 +++
+9114  connect(5, {sa_family=AF_INET, sin_port=htons(49385), sin_addr=inet_addr("127.0.0.1")}, 16) = 0
+9128  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(60751), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(60751), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+9130  +++ exited with 0 +++
+9114  <... connect resumed>)            = -1 EINPROGRESS (Operation now in progress)
+9131  +++ exited with 0 +++
+9129  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(43541), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(43541), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+9133  +++ exited with 0 +++
+9114  <... connect resumed>)            = -1 EINPROGRESS (Operation now in progress)
+9134  +++ exited with 0 +++
+9132  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(54299), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9136  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(54299), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9137  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(54299), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(54299), sin_addr=inet_addr("127.0.0.1")}, 16 <unfinished ...>
+9138  +++ exited with 0 +++
+9114  <... connect resumed>)            = -1 EINPROGRESS (Operation now in progress)
+9139  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(54299), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9140  +++ exited with 0 +++
+9135  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(38667), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9142  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(38667), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9143  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(38667), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9144  +++ exited with 0 +++
+9114  connect(4, {sa_family=AF_INET, sin_port=htons(38667), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+9145  +++ exited with 0 +++
+9141  +++ exited with 0 +++
+9114  +++ exited with 0 +++

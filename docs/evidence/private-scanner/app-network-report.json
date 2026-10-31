@@ -1,0 +1,12 @@
+{
+  "scope": "synthetic app integration/unit tests; not full Windows/game acceptance",
+  "command": "strace -f -e trace=connect python3 -m unittest discover -s tests -v",
+  "tests_discovered": 45,
+  "passed": 44,
+  "skipped": 1,
+  "skip_reason": "Windows PowerShell parser only runs on Windows",
+  "inet_connect_calls": 24,
+  "loopback_only": true,
+  "udp_packet_capture_performed": false,
+  "windows_firewall_tested": false
+}

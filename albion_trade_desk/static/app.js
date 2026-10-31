@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const fmt = value => value == null ? '—' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1}).format(value);
 const date = value => value ? new Date(value * 1000).toLocaleString('ru-RU') : 'нет данных';
 const state = {offset: 0, limit: 50, rows: [], selected: new Set(), sort: 'name', direction: 'asc', total: 0};
-const keys = ['server', 'city', 'quality', 'tier', 'enchantment', 'category', 'search', 'max_age_hours', 'favorites', 'priced'];
+const keys = ['server', 'city', 'quality', 'tier', 'enchantment', 'category', 'scope', 'search', 'max_age_hours', 'favorites', 'priced'];
 let loadSequence = 0;
 function filters() {
   return Object.fromEntries(keys.map(k => [k, $(k).type === 'checkbox' ? String($(k).checked) : $(k).value]));
@@ -42,7 +42,8 @@ function renderRows() {
     cell(tr, age == null ? '—' : age < 3600 ? `${Math.floor(age / 60)} мин` : `${fmt(age / 3600)} ч`, qs.some(q => !q.fresh) ? 'stale' : 'muted');
     const signal = cell(tr);
     if (item.anomaly) signal.append(el('span', 'Аномалия', 'signal'));
-    else if (qs.some(q => q.source === 'data-client')) signal.append(el('span', 'Частичный скан', 'signal'));
+    else if (qs.some(q => q.source === 'private-client')) signal.append(el('span', 'Свои · частичный', 'signal'));
+    else if (qs.some(q => q.source === 'data-client')) signal.append(el('span', 'Старый скан', 'signal'));
     else signal.append(el('span', '—', 'no-data'));
     $('rows').append(tr);
   }
@@ -77,11 +78,18 @@ async function status() {
     const row = el('div', null, 'event'); row.append(el('span', `${event.server.toUpperCase()} · ${event.source} / ${event.kind} · ${fmt(event.count)} записей`), el('span', date(event.at))); $('events').append(row);
   }
   if (!data.events.length) $('events').append(el('p', 'Рыночных обновлений пока нет. Каталог не содержит цен.', 'muted'));
-  const local = data.events.find(e => e.source === 'data-client');
-  $('client-state').textContent = local ? `Последний локальный пакет: ${date(local.at)}. Получено записей: ${local.count}. Это не подтверждает, что клиент сейчас запущен.` : 'Сообщений от Data Client пока нет. Состояние процесса клиента неизвестно.';
-  $('client-command').textContent = `albiondata-client.exe -i "https+pow://albion-online-data.com,http://127.0.0.1:${location.port}/ingest/${$('server').value}"`;
+  renderPrivate(data.private_scanner);
+  const nats = data.public_nats;
+  $('nats-state').textContent = `${nats.status} · ${nats.server || 'сервер не выбран'} · принято записей: ${nats.records} · отклонено: ${nats.rejected}${nats.error ? ' · ' + nats.error : ''}`;
   $('saved-filters').replaceChildren(new Option('Выберите профиль', ''));
   for (const [name, f] of Object.entries(data.filters)) { const option = new Option(name, name); option.dataset.filters = JSON.stringify(f); $('saved-filters').add(option); }
+}
+function renderPrivate(p) {
+  const names = {disabled: 'Выключен', waiting: 'Приёмник включён · ожидание пакетов', receiving: 'Недавно получены пакеты'};
+  $('private-state').textContent = `${names[p.connection]}${p.server ? ' · ' + p.server.toUpperCase() : ''}`;
+  $('private-counts').textContent = `В сессии: ${p.packets || 0} пакетов · ${p.records || 0} записей с обновлениями · ${p.duplicates || 0} повторных пакетов · ${p.rejected || 0} отклонено. В базе: ${p.own_orders} своих заявок, ${p.own_native_history} точек истории; без названия: ${p.unmapped_history}.`;
+  $('private-last').textContent = `Последний пакет: ${date(p.last_received_at)}${p.last_topic ? ' · ' + p.last_topic : ''}`;
+  $('private-launcher').disabled = !p.enabled; $('private-start').disabled = p.enabled; $('private-stop').disabled = !p.enabled;
 }
 async function job(path, body) {
   const started = await api(path, body); notice('Обновление запущено. Данные сохранятся в локальную базу.');
@@ -109,6 +117,16 @@ for (const button of document.querySelectorAll('[data-sort]')) button.onclick = 
 $('select-all').onchange = () => { for (const r of state.rows) $('select-all').checked ? state.selected.add(r.id) : state.selected.delete(r.id); renderRows(); };
 bind('prev', () => { state.offset = Math.max(0, state.offset - state.limit); return load(); }); bind('next', () => { state.offset += state.limit; return load(); });
 bind('refresh', refresh); bind('sources-refresh', refresh);
+bind('private-start', async () => {
+  if (!$('private-ack').checked) throw new Error('Сначала прочитайте предупреждение и отметьте согласие на экспериментальный режим.');
+  await api('/api/private/start', {server: $('server').value, experimental_ack: true});
+  $('scope').value = 'private'; state.offset = 0; await status(); await load();
+  notice('Приватный приёмник включён. Сам клиент ещё не запущен; скачайте файл запуска Windows. Сетевая приватность ещё не подтверждена.');
+});
+bind('private-stop', async () => { await api('/api/private/stop', {}); $('private-ack').checked = false; await status(); notice('Приёмник остановлен. Файл запуска Windows должен остановить свой клиент при следующей проверке.'); });
+bind('private-launcher', () => { location.href = '/api/private/launcher'; });
+bind('nats-start', async () => { await api('/api/nats/start', {server: $('server').value}); await status(); });
+bind('nats-stop', async () => { await api('/api/nats/stop', {}); await status(); });
 for (const id of ['sync-catalog', 'empty-sync']) bind(id, () => job('/api/catalog/sync', {}));
 for (const type of ['csv', 'xlsx']) bind(`export-${type}`, () => { location.href = `/api/export.${type}?${params()}`; });
 bind('backup', () => { location.href = '/api/backup'; });
@@ -123,7 +141,7 @@ async function openItem(item) {
   $('detail-id').textContent = `${item.id} · Q${item.quality} · ${item.server.toUpperCase()}`;
   $('detail-content').replaceChildren(el('p', 'Загрузка…', 'muted')); $('item-dialog').showModal();
   try {
-    const data = await api(`/api/item?id=${encodeURIComponent(item.id)}&server=${item.server}&quality=${item.quality}&max_age_hours=${$('max_age_hours').value}`);
+    const data = await api(`/api/item?id=${encodeURIComponent(item.id)}&server=${item.server}&quality=${item.quality}&max_age_hours=${$('max_age_hours').value}&scope=${$('scope').value}`);
     $('detail-content').replaceChildren(); const table = el('table'); const head = el('tr');
     for (const name of ['Рынок', 'Sell min', 'Buy max', '1H', '24H', '7D']) head.append(el('th', name)); table.append(head);
     for (const row of data.markets) { const tr = el('tr'); cell(tr, $('city').querySelector(`option[value="${row.location}"]`)?.textContent || row.location); priceCell(tr, row.quotes.sell_price_min); priceCell(tr, row.quotes.buy_price_max, 'buy-price'); for (const key of ['1h', '24h', '7d']) cell(tr, volume(row.volumes[key]), 'partial', volumeTitle(row.volumes[key])); table.append(tr); }
@@ -137,3 +155,8 @@ async function openItem(item) {
 bind('close-dialog', () => $('item-dialog').close());
 async function init() { await status(); try { const saved = localStorage.getItem('albion-filters'); if (saved) applyFilters(JSON.parse(saved)); $('language').value = localStorage.getItem('albion-language') || 'ru'; } catch { /* Ignore an obsolete browser preference, not API errors. */ } await load(); await status(); }
 init().catch(e => notice(e.message, true));
+setInterval(async () => {
+  if (document.hidden) return;
+  try { const p = await api('/api/private/status'); renderPrivate(p); if (p.enabled && !$('market-view').hidden) await load(); if (!$('private-view').hidden || !$('sources-view').hidden) await status(); }
+  catch (e) { notice(`Связь с локальным приложением потеряна: ${e.message}`, true); }
+}, 5000);

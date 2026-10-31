@@ -33,6 +33,8 @@ def main():
             except KeyboardInterrupt:
                 pass
             finally:
+                server.private_scanner.stop()
+                server.public_nats.stop()
                 server.server_close()
                 server.jobs.executor.shutdown(wait=True, cancel_futures=True)
         elif args.command == "status":

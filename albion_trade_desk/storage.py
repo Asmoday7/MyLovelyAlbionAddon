@@ -40,7 +40,22 @@ CREATE TABLE IF NOT EXISTS saved_filters (name TEXT PRIMARY KEY, value TEXT NOT 
 CREATE TABLE IF NOT EXISTS http_cache (url TEXT PRIMARY KEY, body TEXT NOT NULL, expires REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at REAL NOT NULL, server TEXT NOT NULL,
  source TEXT NOT NULL, kind TEXT NOT NULL, count INTEGER NOT NULL, detail TEXT NOT NULL);
-PRAGMA user_version=1;
+"""
+
+FEED_SCHEMA = """
+CREATE TABLE IF NOT EXISTS private_sessions (
+ id TEXT PRIMARY KEY, server TEXT NOT NULL, started_at REAL NOT NULL, stopped_at REAL,
+ packets INTEGER NOT NULL DEFAULT 0, records INTEGER NOT NULL DEFAULT 0,
+ duplicates INTEGER NOT NULL DEFAULT 0, rejected INTEGER NOT NULL DEFAULT 0,
+ last_received_at REAL, last_topic TEXT);
+CREATE TABLE IF NOT EXISTS feed_batches (
+ session_id TEXT NOT NULL, server TEXT NOT NULL, source TEXT NOT NULL, digest TEXT NOT NULL,
+ last_received_at REAL NOT NULL, PRIMARY KEY(session_id,server,source,digest));
+CREATE TABLE IF NOT EXISTS native_history (
+ server TEXT NOT NULL, location TEXT NOT NULL, numeric_id INTEGER NOT NULL, item_id TEXT,
+ quality INTEGER NOT NULL, timescale INTEGER NOT NULL, ticks INTEGER NOT NULL,
+ quantity INTEGER NOT NULL, silver REAL NOT NULL, received_at REAL NOT NULL, source TEXT NOT NULL,
+ PRIMARY KEY(server,location,numeric_id,quality,timescale,ticks,source));
 """
 
 
@@ -52,6 +67,38 @@ class Store:
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            # v1 history had no source in its key: a local upload could overwrite public data.
+            history_pk = [r["name"] for r in db.execute("PRAGMA table_info(history)") if r["pk"]]
+            if "source" not in history_pk:
+                backup = self.directory / "before-private-scanner-v2.sqlite3"
+                if not backup.exists():
+                    target = sqlite3.connect(backup)
+                    try:
+                        db.backup(target)
+                    finally:
+                        target.close()
+                db.execute("ALTER TABLE history RENAME TO history_v1")
+                db.execute("""CREATE TABLE history (
+                    server TEXT NOT NULL, location TEXT NOT NULL, item_id TEXT NOT NULL, quality INTEGER NOT NULL,
+                    start REAL NOT NULL, seconds INTEGER NOT NULL, quantity INTEGER NOT NULL, average REAL NOT NULL,
+                    received_at REAL NOT NULL, source TEXT NOT NULL,
+                    PRIMARY KEY(server,location,item_id,quality,start,seconds,source))""")
+                db.execute("INSERT INTO history SELECT * FROM history_v1")
+                db.execute("DROP TABLE history_v1")
+                db.execute("CREATE INDEX history_identity ON history(server,item_id,location,quality,start)")
+            columns = {r["name"] for r in db.execute("PRAGMA table_info(orders)")}
+            if "source" not in columns:
+                db.execute("ALTER TABLE orders RENAME TO orders_v1")
+                db.execute("""CREATE TABLE orders (
+                    server TEXT NOT NULL, id TEXT NOT NULL, item_id TEXT NOT NULL, location TEXT NOT NULL,
+                    quality INTEGER NOT NULL, side TEXT NOT NULL, price REAL NOT NULL, amount INTEGER NOT NULL,
+                    expires REAL NOT NULL, received_at REAL NOT NULL, source TEXT NOT NULL,
+                    PRIMARY KEY(server,id,source))""")
+                db.execute("INSERT INTO orders SELECT *, 'data-client' FROM orders_v1")
+                db.execute("DROP TABLE orders_v1")
+            db.execute("PRAGMA user_version=2")
+        with self.connect() as db:
+            db.executescript(FEED_SCHEMA)
 
     @contextmanager
     def connect(self):

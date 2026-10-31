@@ -1,0 +1,12 @@
+8078  connect(8, {sa_family=AF_INET, sin_port=htons(45955), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+8080  connect(10, {sa_family=AF_INET, sin_port=htons(37209), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+8080  connect(12, {sa_family=AF_INET, sin_port=htons(33779), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+8084  connect(12, {sa_family=AF_INET, sin_port=htons(33779), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+8080  connect(12, {sa_family=AF_INET, sin_port=htons(33779), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+8083  +++ exited with 0 +++
+8082  +++ exited with 0 +++
+8084  +++ exited with 0 +++
+8081  +++ exited with 0 +++
+8079  +++ exited with 0 +++
+8080  +++ exited with 0 +++
+8078  +++ exited with 0 +++
