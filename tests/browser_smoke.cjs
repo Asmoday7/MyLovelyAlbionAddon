@@ -1,0 +1,42 @@
+// Optional UI acceptance: installed Playwright + Chromium, live app with real catalogue.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+(async () => {
+  const browser = await chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true,
+    args: process.env.CHROMIUM_NO_SANDBOX === '1' ? ['--no-sandbox'] : [],
+  });
+  try {
+    const page = await browser.newPage({viewport: {width: 1512, height: 982}});
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(process.env.ALBION_SMOKE_URL || 'http://127.0.0.1:8765');
+    await page.waitForSelector('#rows tr');
+    assert.equal(await page.locator('#rows tr').count(), 50);
+    const response = page.waitForResponse(r => r.url().includes('/api/market?') && r.url().includes('search=T4_BAG'));
+    await page.locator('#search').fill('T4_BAG');
+    await response;
+    await page.locator('#rows .item-id').filter({hasText: /^T4_BAG$/}).locator('..').getByRole('button').click();
+    await page.waitForSelector('#detail-content table');
+    assert.equal(await page.locator('#detail-content table tr').count() - 1, 8);
+    await page.locator('#close-dialog').click();
+    await page.locator('#select-all').check();
+    assert.ok((await page.locator('#refresh').textContent()).includes('(10)'));
+    const downloading = page.waitForEvent('download');
+    await page.locator('#export-xlsx').click();
+    const download = await downloading;
+    assert.equal(download.suggestedFilename(), 'MarketPrices.xlsx');
+    if (process.env.ALBION_ARTIFACT_DIR) await download.saveAs(process.env.ALBION_ARTIFACT_DIR + '/market.xlsx');
+    await page.locator('[data-view="sources"]').click();
+    assert.match(await page.locator('#client-command').textContent(), /ingest\/east/);
+    await page.locator('[data-view="market"]').click();
+    if (process.env.ALBION_ARTIFACT_DIR) await page.screenshot({path: process.env.ALBION_ARTIFACT_DIR + '/market-desktop.png', fullPage: true});
+    await page.setViewportSize({width: 390, height: 844});
+    assert.equal(await page.evaluate(() => document.body.scrollWidth), 390);
+    if (process.env.ALBION_ARTIFACT_DIR) await page.screenshot({path: process.env.ALBION_ARTIFACT_DIR + '/market-mobile.png', fullPage: true});
+    assert.deepEqual(errors, []);
+    console.log('Browser smoke passed: catalogue, search, eight markets, selection, XLSX, sources, mobile layout; no JS errors.');
+  } finally {
+    await browser.close();
+  }
+})().catch(e => { console.error(e); process.exit(1); });

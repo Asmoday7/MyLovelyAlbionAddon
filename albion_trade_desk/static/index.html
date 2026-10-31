@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Albion Trade Desk</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="Albion Trade Desk"><span class="brand-mark">A</span><span>ALBION<span class="brand-small">TRADE DESK</span></span></a>
+  <span class="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</span>
+  <nav aria-label="Основные разделы">
+    <button class="nav active" data-view="market"><span>▦</span> Market Intelligence</button>
+    <button class="nav" data-view="sources"><span>⇄</span> Источники и сканер</button>
+    <button class="nav" data-view="settings"><span>⚙</span> Данные и настройки</button>
+  </nav>
+  <div class="sidebar-note"><span class="status-dot"></span> Локальное приложение<p>Ваши данные — на вашем компьютере.</p><small>WORKING CORE · v0.1</small></div>
+</aside>
+<main>
+  <header class="topbar"><div class="breadcrumbs">Рабочее пространство <span>/</span> <strong id="breadcrumb">Market Intelligence</strong></div><label class="server-label">Сервер <select id="server" aria-label="Сервер"><option value="east">Asia / East</option><option value="west">Americas / West</option><option value="europe">Europe</option></select></label></header>
+  <div id="notice" role="status" hidden></div>
+  <section id="market-view" class="view">
+    <div class="heading"><div><p class="eyebrow">РЫНОК В ДЕТАЛЯХ</p><h1>Market Intelligence<span class="accent">.</span></h1><p class="subtitle">Цены, спрос и свежесть наблюдений. Решения начинаются с данных.</p></div><button id="refresh" class="primary">↻ Обновить выбранные</button></div>
+    <div class="stats">
+      <article><span class="stat-label">ПРЕДМЕТОВ В КАТАЛОГЕ</span><strong id="item-count">—</strong><small>RU / EN · внутренние ID сохранены</small></article>
+      <article><span class="stat-label">ЦЕНОВЫХ НАБЛЮДЕНИЙ</span><strong id="quote-count">—</strong><small>Все серверы · все источники</small></article>
+      <article><span class="stat-label">ИНТЕРВАЛОВ ИСТОРИИ</span><strong id="history-count">—</strong><small>Пропуски не считаются нулевыми продажами</small></article>
+      <article class="stat-accent"><span class="stat-label">ИСТОЧНИК РЫНКА</span><strong>AODP <span>↗</span></strong><small>Обновления сообщества · неполное покрытие</small></article>
+    </div>
+    <div class="table-card">
+      <div class="table-title"><h2>Обзор предметов <span id="total-badge" class="badge">0</span></h2><div class="exports"><button id="export-csv">↓ CSV</button><button id="export-xlsx">↓ Excel</button></div></div>
+      <form id="filters" class="filters">
+        <label class="search-label"><span>⌕</span><input id="search" placeholder="Название предмета или ID…" aria-label="Поиск предмета"></label>
+        <select id="city" aria-label="Город"></select>
+        <select id="quality" aria-label="Качество"><option value="1">Обычное · Q1</option><option value="2">Хорошее · Q2</option><option value="3">Выдающееся · Q3</option><option value="4">Отличное · Q4</option><option value="5">Шедевр · Q5</option></select>
+        <select id="tier" aria-label="Тир"><option value="">Все тиры</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select>
+        <select id="enchantment" aria-label="Зачарование"><option value="">Все зачарования</option><option value="0">.0</option><option value="1">.1</option><option value="2">.2</option><option value="3">.3</option><option value="4">.4</option></select>
+        <select id="category" aria-label="Категория"><option value="">Все категории</option></select>
+        <label class="check"><input type="checkbox" id="favorites"> Избранное</label><label class="check"><input type="checkbox" id="priced"> Только с ценами</label>
+      </form>
+      <div class="table-options"><div><span class="status-dot"></span><span id="market-label">Caerleon</span><span class="sep">·</span><span>1H / 24H / 7D — закрытые UTC-часы</span></div><div><label>Названия <select id="language"><option value="ru">Русский</option><option value="en">English</option></select></label><button id="save-filter" class="quiet">＋ Сохранить фильтр</button></div></div>
+      <div class="table-scroll"><table><thead><tr><th class="select-cell"><input type="checkbox" id="select-all" aria-label="Выбрать страницу"></th><th><button data-sort="name">Предмет ↕</button></th><th><button data-sort="tier">T / E ↕</button></th><th>Sell min</th><th>Buy max</th><th>Spread %</th><th>1H</th><th>24H</th><th>7D</th><th>VWAP · 7D</th><th>Свежесть</th><th>Сигналы</th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div id="empty" class="empty" hidden><div class="empty-icon">⌕</div><h3>Пока нечего показать</h3><p>Загрузите каталог в настройках или измените фильтры.</p><button id="empty-sync" class="primary">Загрузить каталог</button></div>
+      <footer class="table-footer"><span id="page-info">—</span><div><button id="prev" aria-label="Предыдущая страница">←</button><span id="page-number">1</span><button id="next" aria-label="Следующая страница">→</button></div></footer>
+    </div>
+    <div class="footnotes"><span><i class="peach-dot"></i> Частичный объём: ≥ известной суммы; покрытие — в подсказке</span><span>— нет данных · Историческая средняя не является ценой ордера</span></div>
+    <p class="caveat">Временные границы интервалов AODP ожидают живой проверки Asia. До неё метрики истории считаются предварительными. Неизвестная глубина рынка не позволяет обещать исполнение партии.</p>
+  </section>
+  <section id="sources-view" class="view" hidden>
+    <p class="eyebrow">ПРОИСХОЖДЕНИЕ ДАННЫХ</p><h1>Источники и сканер<span class="accent">.</span></h1><p class="subtitle">Наблюдения сообщества и локальный поток — с явными ограничениями.</p>
+    <div class="panels"><article class="panel"><h2>Albion Data Project</h2><p>REST-обновление для выбранных предметов, города и качества. Цены кэшируются 15 минут, история — 1 час.</p><p>Наличие подключения определяется реальным запросом, а не наличием настроенного адреса.</p><button id="sources-refresh">Обновить выбранные предметы</button></article><article class="panel"><h2>Локальный приёмник <span class="badge">Эксперимент</span></h2><p>HTTP-приёмник работает вместе с приложением. Совместимость формата проверяется тестами; проверка с игрой на Windows ещё не выполнена.</p><p id="client-state">Сообщений от Data Client пока нет.</p><code id="client-command"></code><p class="muted">Команда сохраняет стандартную отправку AODP. Регион в локальном URL должен совпадать с сервером игры. Личные данные не запрашиваются.</p></article></div>
+    <article class="panel"><h2>Последние обновления</h2><div id="events" class="event-list"></div></article>
+    <article class="panel"><h2>Что пока не подключено</h2><p>NATS, импорт массовых SQL-дампов, полная глубина заявок. Частичные локальные наблюдения не считаются полной копией рынка. Отсутствие заявки не доказывает её продажу.</p></article>
+  </section>
+  <section id="settings-view" class="view" hidden>
+    <p class="eyebrow">ВАШЕ РАБОЧЕЕ МЕСТО</p><h1>Данные и настройки<span class="accent">.</span></h1><p class="subtitle">Локальная база SQLite. Настройки сохраняются между запусками.</p>
+    <div class="panels"><article class="panel"><h2>Каталог Albion</h2><p>Все доступные предметы, RU/EN, категории и рецепты из ao-data/ao-bin-dumps. Обновляйте после игровых патчей.</p><p id="catalog-date" class="muted"></p><button id="sync-catalog" class="primary">↻ Синхронизировать каталог</button></article><article class="panel"><h2>Свежесть наблюдений</h2><label>Максимальный возраст, часы <input id="max_age_hours" type="number" min="0" value="24"></label><p>Устаревшие цены остаются видимыми с отметкой. Обновление HTTP-кэша не делает старое рыночное наблюдение свежим.</p><label>Сохранённые профили <select id="saved-filters"><option value="">Выберите профиль</option></select></label></article></div>
+    <div class="panels"><article class="panel"><h2>Импорт рыночного JSON</h2><p>Для сохранённых ответов AODP. Сервер берётся из переключателя сверху и не определяется автоматически.</p><label>Тип <select id="import-kind"><option value="prices">Prices</option><option value="history">History · 1 час</option></select></label><input id="import-file" type="file" accept=".json,application/json"><button id="import-button">Импортировать</button><p class="muted">Никаких демонстрационных цен в рабочую базу не добавляется.</p></article><article class="panel"><h2>Excel и резервное копирование</h2><p>CSV в UTF-8 и XLSX с отдельным листом MarketPrices. Время — Unix UTC seconds, coverage — число от 0 до 1.</p><button id="backup">↓ Резервная копия SQLite</button><p>Power Query: JSON API <code>/api/export.json</code> с параметрами server, city, quality. Подробности — в README.</p></article></div>
+  </section>
+</main>
+<dialog id="item-dialog"><div class="dialog-head"><div><p class="eyebrow">КАРТОЧКА ПРЕДМЕТА</p><h2 id="detail-title"></h2><code id="detail-id"></code></div><button id="close-dialog" aria-label="Закрыть">×</button></div><div id="detail-content"></div></dialog>
+<dialog id="profile-dialog"><form id="profile-form"><h2>Сохранить фильтр</h2><label>Название профиля<input id="profile-name" maxlength="100" required></label><div class="dialog-actions"><button type="button" id="cancel-profile">Отмена</button><button class="primary" type="submit">Сохранить</button></div></form></dialog>
+<script type="module" src="/app.js"></script>
+</body></html>

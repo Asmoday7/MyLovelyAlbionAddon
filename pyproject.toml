@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "albion-trade-desk"
+version = "0.1.0"
+description = "Local, evidence-aware market intelligence for Albion Online"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+albion-trade-desk = "albion_trade_desk.__main__:main"
+
+[tool.setuptools.package-data]
+albion_trade_desk = ["static/*"]
