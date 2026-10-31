@@ -14,8 +14,10 @@ def main():
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--server", default="east", choices=("east", "west", "europe"))
     parser.add_argument("--open", action="store_true", help="Открыть браузер")
+    parser.add_argument("--verbose", action="store_true", help="Показать технические HTTP-журналы для диагностики")
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s" if args.verbose else "%(message)s")
     store = Store(args.data_dir)
     try:
         if args.command == "serve":
@@ -25,7 +27,11 @@ def main():
             if args.port and server.server_port != args.port:
                 print(f"Порт {args.port} недоступен. Выбран свободный порт {server.server_port}.", flush=True)
             address = f"http://127.0.0.1:{server.server_port}"
-            print("Albion Trade Desk: " + address, flush=True)
+            print("\nAlbion Trade Desk запущен.", flush=True)
+            print("Адрес приложения: " + address, flush=True)
+            print("Окно можно свернуть. Все действия выполняйте в браузере.", flush=True)
+            print("Первый запуск: нажмите «Загрузить список предметов» в приложении.", flush=True)
+            print("Для остановки нажмите Ctrl+C.\n", flush=True)
             if args.open:
                 webbrowser.open(address)
             try:

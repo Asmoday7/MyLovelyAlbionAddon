@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+title Albion Trade Desk
 cd /d "%~dp0"
 where py >nul 2>nul
 if %errorlevel% equ 0 (

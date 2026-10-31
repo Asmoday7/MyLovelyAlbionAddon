@@ -27,31 +27,42 @@ class Jobs:
         self.lock = threading.Lock()
         self.entries = {}
 
-    def submit(self, function):
+    def submit(self, function, kind="market"):
         with self.lock:
             if any(j["status"] in ("queued", "running") for j in self.entries.values()):
                 raise ValueError("Обновление уже идёт. Дождитесь его завершения")
             uid = uuid.uuid4().hex
             self.entries = dict(list(self.entries.items())[-19:])
-            self.entries[uid] = {"id": uid, "status": "queued"}
+            self.entries[uid] = {"id": uid, "status": "queued", "kind": kind}
 
         def run():
+            label = "Список предметов" if kind == "catalog" else "Общие рыночные данные"
+            LOG.info("%s: загрузка началась. Результат будет показан в браузере.", label)
             with self.lock:
                 self.entries[uid]["status"] = "running"
             try:
                 result = function()
                 with self.lock:
                     self.entries[uid].update(status="done", result=result)
+                if kind == "catalog":
+                    LOG.info("Список готов: %s предметов. Продолжайте в браузере.", result.get("items", 0))
+                else:
+                    LOG.info("Загрузка завершена: %s ценовых наблюдений, %s интервалов истории.", result.get("prices", 0), result.get("history", 0))
             except Exception as exc:
-                LOG.exception("Background update failed")
+                LOG.error("%s: загрузка не завершена. %s", label, exc)
+                LOG.debug("Подробности ошибки фонового обновления", exc_info=True)
                 with self.lock:
                     self.entries[uid].update(status="error", error=str(exc))
         self.executor.submit(run)
-        return {"id": uid, "status": "queued"}
+        return {"id": uid, "status": "queued", "kind": kind}
 
     def get(self, uid):
         with self.lock:
             return dict(self.entries.get(uid, {"status": "unknown"}))
+
+    def current(self):
+        with self.lock:
+            return next((dict(j) for j in self.entries.values() if j["status"] in ("queued", "running")), None)
 
 
 def make_server(store, port=8765):
@@ -60,10 +71,10 @@ def make_server(store, port=8765):
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
-            if self.path.startswith('/private/'):
-                LOG.info("Private market receiver: HTTP %s", args[1] if len(args) > 1 else "request")
+            if getattr(self, 'path', '').startswith('/private/'):
+                LOG.debug("Private market receiver: HTTP %s", args[1] if len(args) > 1 else "request")
             else:
-                LOG.info(format, *args)
+                LOG.debug(format, *args)
 
         def respond(self, data, status=200, content_type="application/json; charset=utf-8", filename=None):
             body = json.dumps(data, ensure_ascii=False, allow_nan=False).encode() if isinstance(data, (dict, list)) else data
@@ -97,7 +108,7 @@ def make_server(store, port=8765):
                         categories = [r[0] for r in db.execute("SELECT DISTINCT category FROM items ORDER BY category")]
                     self.respond({**store.status(), "servers": list(SERVERS), "markets": MARKETS,
                                   "version": __version__, "categories": categories, "filters": store.settings(),
-                                  "private_scanner": private.status(), "public_nats": nats.status()})
+                                  "private_scanner": private.status(), "public_nats": nats.status(), "active_job": jobs.current()})
                 elif path == "/api/private/status":
                     self.respond(private.status())
                 elif path == "/api/private/launcher":
@@ -177,7 +188,7 @@ def make_server(store, port=8765):
                         raise ValueError("Неверный адрес приватной сессии")
                     self.respond(private.receive(parts[1], parts[2], parts[3], body))
                 elif path == "/api/catalog/sync":
-                    self.respond(jobs.submit(lambda: sync_catalog(client)), 202)
+                    self.respond(jobs.submit(lambda: sync_catalog(client), "catalog"), 202)
                 elif path == "/api/market/refresh":
                     ids = body["items"]
                     if not isinstance(ids, list) or not 1 <= len(ids) <= 100:
