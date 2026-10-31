@@ -1,6 +1,11 @@
+import {createCloth} from './cloth.js';
+import {createMarketView} from './market_view.js';
 import {createCrafting} from './crafting.js';
 const $ = id => document.getElementById(id);
 let crafting = null;
+let marketView = null;
+let marketNames = {};
+let cardLayout = true;
 const fmt = value => value == null ? '—' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1}).format(value);
 const date = value => value ? new Date(value * 1000).toLocaleString('ru-RU') : 'нет данных';
 const state = {offset: 0, limit: 50, rows: [], selected: new Set(), sort: 'name', direction: 'asc', total: 0, catalog: null, busy: false, activeJob: null, privateEnabled: false};
@@ -28,7 +33,7 @@ function volume(point) { return point.volume != null ? fmt(point.volume) : point
 function volumeTitle(point) { return `Покрытие: ${point.known_hours}/${point.expected_hours} часов (${fmt(point.coverage * 100)}%). ${date(point.start)} — ${date(point.end)}. Не точное скользящее окно.`; }
 function priceCell(tr, quote, className) {
   const td = cell(tr, quote ? fmt(quote.price) : 'Нет цены', quote ? (quote.fresh ? className : 'stale') : 'no-data', quote ? `Источник: ${quote.source}\nНаблюдение: ${date(quote.observed_at)}\nПолучено: ${date(quote.received_at)}\nОграничение: ${quote.limitation}` : 'Цена ещё не получена или источник её не знает');
-  if (quote) td.append(el('small', quote.source === 'private-client' ? 'Моё наблюдение' : quote.source === 'data-client' ? 'Старое локальное' : 'Общие данные', 'price-origin'));
+  if (quote) {td.append(el('b',` · ${quote.quality===5?'★ Шедевр':quote.quality+' рамка'}`,quote.quality===5?'masterpiece':'quality-caption'));td.append(el('small', quote.source === 'private-client' ? 'Моё наблюдение' : quote.source === 'data-client' ? 'Старое локальное' : 'Общие данные', 'price-origin'));}
   return td;
 }
 function advancedCell(tr, text, className = '', title) { return cell(tr, text, `advanced-column ${className}`, title); }
@@ -66,12 +71,13 @@ function renderRows() {
     const actions=el('div',null,'item-actions');actions.append(fetchPrice);
     if (item.has_recipe) {
       const pack=el('button','В набор для крафта','quiet');
-      pack.onclick=()=>{showView('craft',true);crafting.openItem(item.id,Number($('quality').value)).catch(showError);};
+      pack.onclick=()=>{showView('craft',true);crafting.openItem(item.id,['auto','all'].includes($('quality').value)?'auto':Number($('quality').value)).catch(showError);};
       actions.append(pack);
     }
     cell(tr).append(actions);
     $('rows').append(tr);
   }
+  renderCards();
   $('empty').hidden = state.rows.length > 0; $('total-badge').textContent = fmt(state.total);
   $('page-info').textContent = state.total ? `${state.offset + 1}–${Math.min(state.offset + state.limit, state.total)} из ${fmt(state.total)} предметов` : '0 предметов';
   $('page-number').textContent = Math.floor(state.offset / state.limit) + 1;
@@ -120,7 +126,7 @@ async function load() {
 }
 async function status() {
   const data = await api('/api/status');
-  state.catalog = data.items;
+  state.catalog = data.items;marketNames=data.markets;
   $('item-count').textContent = fmt(data.items); $('quote-count').textContent = fmt(data.quotes); $('history-count').textContent = fmt(data.history);
   if (!$('city').options.length) {
     for (const [id, name] of Object.entries(data.markets)) $('city').add(new Option(name, id));
@@ -177,6 +183,7 @@ async function trackJob(started) {
       error.detail = result.error || result.status; throw error;
     }
     if (catalog) notice(`Список готов: ${fmt(result.result.items)} предметов. Теперь выберите пример или введите название в поиск ниже.`);
+    else if(started.kind==='history') notice(result.result.history?`Получено исторических интервалов: ${fmt(result.result.history)}. График обновлён.`:'За выбранный период источник не сообщил историю. Пропуски не означают нулевые продажи.');
     else notice(result.result.prices ? `Получено ценовых наблюдений: ${fmt(result.result.prices)}. Исторических интервалов: ${fmt(result.result.history)}. ${started.kind==='craft'?'Цены набора обновлены в списке материалов.':'Цены показаны в таблице.'}` : 'Запрос выполнен, но источник пока не сообщил цен для выбранных условий. Попробуйте другой город или качество. «Нет цены» не означает нулевую стоимость.');
   } finally { state.activeJob = null; setBusy(false); }
 }
@@ -191,7 +198,7 @@ async function refresh(items = [...state.selected]) {
   if ($('scope').value === 'private') { notice('Сейчас показаны только ваши наблюдения. Для них проверьте подключение в «Мои наблюдения». Общие цены можно выбрать отдельно.'); return; }
   if (!items.length) { notice('Нажмите «Узнать цену» в строке предмета. Для нескольких предметов отметьте галочки в первом столбце.'); return; }
   if (items.length > 100) throw new Error('За один раз можно загрузить цены не более чем для 100 предметов.');
-  await job('/api/market/refresh', {items, server: $('server').value, cities: [$('city').value], qualities: [Number($('quality').value)]});
+  await job('/api/market/refresh', {items, server: $('server').value, cities: [$('city').value], qualities: ['all','auto'].includes($('quality').value)?[1,2,3,4,5]:[Number($('quality').value)]});
 }
 function bind(id, action) { $(id).addEventListener('click', async () => { try { await action(); } catch (error) { showError(error); } }); }
 function showView(name,skipCraft=false) {
@@ -203,6 +210,7 @@ function showView(name,skipCraft=false) {
   $('notice').hidden = true; $('error-details').hidden = true;
   status().catch(showError);
   if (name==='craft'&&!skipCraft) crafting?.open().catch(showError);
+  if (name==='cloth') cloth.open().catch(showError);
   if (name==='market') load().catch(showError); // A saved pack may have selected another server.
 }
 for (const button of document.querySelectorAll('[data-view]')) button.onclick = () => showView(button.dataset.view);
@@ -254,29 +262,26 @@ $('profile-form').onsubmit = async e => { e.preventDefault(); try { await api('/
 $('saved-filters').onchange = async () => { const data = $('saved-filters').selectedOptions[0]?.dataset.filters; if (!data) return; applyFilters(JSON.parse(data)); state.offset = 0; state.selected.clear(); try { await load(); } catch (e) { notice(e.message, true); } };
 function applyFilters(values) { for (const k of keys) if (k in values) { if ($(k).type === 'checkbox') $(k).checked = values[k] === 'true'; else $(k).value = values[k]; } }
 bind('import-button', async () => { const file = $('import-file').files[0]; if (!file) throw new Error('Выберите JSON-файл'); if (file.size > 15 * 1024 * 1024) throw new Error('Файл слишком большой: максимум 15 МБ'); const data = JSON.parse(await file.text()); const result = await api('/api/import', {kind: $('import-kind').value, data, server: $('server').value}); notice(`Импортировано записей: ${result.imported}`); await status(); await load(); });
-async function openItem(item) {
-  $('detail-title').textContent = $('language').value === 'en' ? item.name_en : item.name_ru;
-  $('detail-id').textContent = `${item.id} · Q${item.quality} · ${item.server.toUpperCase()}`;
-  $('detail-content').replaceChildren(el('p', 'Загрузка…', 'muted')); $('item-dialog').showModal();
-  try {
-    const data = await api(`/api/item?id=${encodeURIComponent(item.id)}&server=${item.server}&quality=${item.quality}&max_age_hours=${$('max_age_hours').value}&scope=${$('scope').value}`);
-    $('detail-content').replaceChildren(); const table = el('table'); const head = el('tr');
-    for (const name of ['Город', 'Продают от', 'Покупают до']) head.append(el('th', name)); table.append(head);
-    for (const row of data.markets) { const tr = el('tr'); cell(tr, $('city').querySelector(`option[value="${row.location}"]`)?.textContent || row.location); if (row.location === '3003') cell(tr, 'Не применяется', 'no-data'); else priceCell(tr, row.quotes.sell_price_min); priceCell(tr, row.quotes.buy_price_max, 'buy-price'); table.append(tr); }
-    const wrap = el('div', null, 'table-scroll'); wrap.append(table); $('detail-content').append(wrap);
-    $('detail-content').append(el('p', 'Показаны только уже полученные наблюдения. Цена может устареть; количество доступных предметов неизвестно. Black Market покупает предметы — смотрите «Покупают до».', 'caveat'));
-    const details = el('details', null, 'metric-explainer'); details.append(el('summary', 'История продаж и рецепт'));
-    const historyTable = el('table'), historyHead = el('tr');
-    for (const title of ['Город', '1 час', '24 часа', '7 дней']) historyHead.append(el('th', title)); historyTable.append(historyHead);
-    for (const row of data.markets) { const tr = el('tr'); cell(tr, $('city').querySelector(`option[value="${row.location}"]`)?.textContent || row.location); for (const key of ['1h', '24h', '7d']) cell(tr, volume(row.volumes[key]), 'partial', volumeTitle(row.volumes[key])); historyTable.append(tr); }
-    const historyWrap = el('div', null, 'table-scroll'); historyWrap.append(historyTable); details.append(historyWrap);
-    details.append(el('p', 'История по закрытым часам; «≥» означает неполные данные. Временные границы ещё ожидают живой проверки.', 'caveat'));
-    details.append(el('h2', `Рецептов в списке: ${data.recipes.length}`));
-    for (const recipe of data.recipes) { const p = el('p', `Вариант ${recipe.variant + 1} · Выход: ${recipe.output} · Базовый Focus: ${fmt(recipe.focus)} · Серебро: ${fmt(recipe.silver)}`, 'muted'); const ul = el('ul'); for (const r of JSON.parse(recipe.resources)) ul.append(el('li', `${r.item_id} × ${r.count}${r.returnable ? '' : ' · без возврата'}`)); details.append(p, ul); }
-    details.append(el('p', 'Расчёт себестоимости, налогов и прибыли от крафта ещё не реализован.', 'caveat'));
-    $('detail-content').append(details);
-  } catch (error) { $('detail-content').replaceChildren(el('p', error.message)); }
+function openItem(item){marketView.open(item).catch(showError);}
+function renderCards(){
+  const wrap=$('market-cards');wrap.replaceChildren();
+  for(const item of state.rows){
+    const card=el('article',null,'market-card'+(state.selected.has(item.id)?' selected':'')),head=el('div',null,'market-card-heading');
+    const select=el('input');select.type='checkbox';select.checked=state.selected.has(item.id);select.setAttribute('aria-label','Выбрать '+item.name_ru);
+    select.onchange=()=>{select.checked?state.selected.add(item.id):state.selected.delete(item.id);card.classList.toggle('selected',select.checked);updateSelected();};
+    const open=el('button',$('language').value==='en'?item.name_en:item.name_ru,'card-name');open.onclick=()=>openItem(item);
+    const star=el('button',item.favorite?'★':'☆','favorite');star.setAttribute('aria-label','Добавить или убрать из избранного');star.onclick=async()=>{try{await api('/api/favorites',{id:item.id,enabled:!item.favorite});await load();}catch(e){showError(e);}};
+    head.append(select,star,open,el('strong',`${item.tier}.${item.enchantment}`,'tier-pill'));card.append(head,marketView.qualityGrid(item.by_quality));
+    const actions=el('div',null,'card-actions'),refresh=el('button','Узнать цены','row-refresh');refresh.disabled=state.busy||$('scope').value==='private';refresh.onclick=()=>refreshCard(item.id);
+    const details=el('button','График и города','secondary');details.onclick=()=>openItem(item);actions.append(refresh,details);
+    if(item.has_recipe){const b=el('button','Набор для крафта','quiet');b.onclick=()=>{showView('craft',true);crafting.openItem(item.id,$('quality').value).catch(showError);};actions.append(b);}
+    card.append(actions);wrap.append(card);
+  }
 }
+async function refreshCard(id){try{await refresh([id]);}catch(e){showError(e);}}
+function layout(cards){cardLayout=cards;$('market-cards').hidden=!cards;$('market-table-wrap').hidden=cards;
+  for(const [id,on] of [['layout-cards',cards],['layout-table',!cards]]){$(id).classList.toggle('active',on);$(id).setAttribute('aria-pressed',String(on));}if(state.rows.length)renderRows();}
+bind('layout-cards',()=>layout(true));bind('layout-table',()=>layout(false));
 bind('close-dialog', () => $('item-dialog').close());
 async function init() {
   await status();
@@ -287,6 +292,8 @@ async function init() {
 }
 crafting=createCrafting({api,fmt,date,el,notice,showError,job,showView,catalog:()=>state.catalog,
   initialCity:()=>$('city').value,initialScope:()=>$('scope').value,maxAge:()=>$('max_age_hours').value});
+marketView=createMarketView({api,el,fmt,notice,showError,job,filters,markets:()=>marketNames,craft:(id,q)=>{showView('craft',true);crafting.openItem(id,q).catch(showError);}});
+const cloth=createCloth({api,el,fmt,notice,showError});
 init().catch(showError);
 setInterval(async () => {
   if (document.hidden || state.polling) return;

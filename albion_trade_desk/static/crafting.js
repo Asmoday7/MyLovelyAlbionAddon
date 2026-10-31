@@ -1,3 +1,4 @@
+import {qualityGrid,qualityNames} from './quality.js';
 // The server owns recipes, quantities, provenance and cost calculations.
 export function createCrafting({api, fmt, date, el, notice, showError, job, showView, catalog, initialCity, initialScope, maxAge}) {
   const $ = id => document.getElementById(id);
@@ -59,7 +60,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     if (sequence!==s.sequence) return;
     s.plan=data;
     const oq=data.output_market.quote;
-    const signature=JSON.stringify([data.config,data.resources.map(r=>[r.id,r.quantity,r.status,r.quote?.price,r.quote?.observed_at,r.quote?.received_at,Math.floor((r.quote?.age_seconds||0)/60)]),[oq?.price,oq?.observed_at,oq?.received_at,oq?.fresh,Math.floor((oq?.age_seconds||0)/60)]]);
+    const signature=JSON.stringify([data.config,data.resources.map(r=>[r.id,r.quantity,r.status,r.quote?.price,r.quote?.observed_at,r.quote?.received_at,Math.floor((r.quote?.age_seconds||0)/60)]),[oq?.price,oq?.observed_at,oq?.received_at,oq?.fresh,Math.floor((oq?.age_seconds||0)/60)],data.output_market.by_quality.map(r=>[r.quality,Object.values(r.quotes).map(q=>[q.price,q.observed_at,q.received_at,q.fresh])])]);
     if (force || signature!==s.signature) {s.signature=signature;renderPlan();}
   }
   function copyName(row) {return $('craft-copy-language').value==='ru'?row.name_ru:row.name_en;}
@@ -72,7 +73,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     const wrap=el('div',null,`craft-resource ${row.status==='ready'?'ready':''} ${s.focused===row.id?'focused':''}`);
     wrap.dataset.itemId=row.id;
     const name=el('div');name.append(el('div',row.name_ru,'resource-name'),el('small',row.name_en));
-    name.append(el('small',`Тир ${row.tier}.${row.enchantment} · ${output?'готовый предмет, качество '+row.quality:'материал, обычное качество'}`));
+    name.append(el('small',`Тир ${row.tier}.${row.enchantment} · ${output?'готовый предмет · '+(qualityNames[row.quality]||'любая рамка'):'материал, обычное качество'}`));
     if (!output && row.returnable_quantity===0) name.append(el('small','Компонент без возврата ресурсов'));
     name.title=row.id;
     const quantity=el('div',null);quantity.append(el('span',fmt(row.quantity),'resource-qty'),el('small','шт.'));
@@ -88,7 +89,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
   }
   function outputRow() {
     const p=s.plan,q=p.output_market.quote;
-    return {...p.item,quantity:p.produced,quality:p.output_market.quality,quote:q,
+    return {...p.item,quantity:p.produced,quality:p.output_market.quote?.quality||p.output_market.quality,quote:q,
       status:q?.fresh?'ready':q?'stale':'missing',catalogue_missing:false};
   }
   function renderPlan() {
@@ -108,7 +109,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     $('craft-save').textContent=s.id?'Сохранить изменения':'Сохранить набор';
     $('craft-save-copy').hidden=!s.id;$('craft-delete').hidden=!s.id;
     $('craft-resources').replaceChildren(...p.resources.map(r=>resource(r)));
-    $('craft-output').replaceChildren(resource(outputRow(),true));
+    $('craft-output').replaceChildren(resource(outputRow(),true),qualityGrid(p.output_market.by_quality,{el,fmt,bm:p.output_market.location==='3003'}));
     $('craft-output').append(el('p',p.output_market.kind==='buy_price_max'?'Black Market: смотрим только заявку покупателя, не sell-цену.':'Готовый предмет: смотрим предложения продавцов для сравнения. Это не чистая прибыль.','caveat'));
     $('craft-public-refresh').disabled=p.config.scope==='private';
     const missing=p.resources.filter(r=>r.status!=='ready').length;
@@ -165,7 +166,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
   async function openItem(uid,outputQuality=1) {
     await open();s.id=null;
     $('craft-city').value=initialCity()==='3003'?'1002':initialCity();$('craft-sale-city').value=initialCity();
-    $('craft-scope').value=initialScope();$('craft-quality').value=String(outputQuality);
+    $('craft-scope').value=initialScope();$('craft-quality').value=String(['auto','all'].includes(String(outputQuality))?'auto':outputQuality);
     $('craft-search').value=uid;await search(uid,true,uid);
   }
   let debounce;

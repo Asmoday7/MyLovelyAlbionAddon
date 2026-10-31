@@ -1,0 +1,58 @@
+// ONLY the disposable quality/history fixture database. No real prices are inserted.
+const {chromium}=require('playwright');const assert=require('node:assert/strict');
+if(process.env.ALBION_CRAFT_TEST_DATA!=='1')throw Error('Use an isolated fixture database.');
+const base=process.env.ALBION_SMOKE_URL||'http://127.0.0.1:8796',artifacts=process.env.ALBION_ARTIFACT_DIR;
+(async()=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:process.env.CHROMIUM_NO_SANDBOX==='1'?['--no-sandbox']:[]});
+ const page=await browser.newPage({viewport:{width:1512,height:982}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ try{
+  await page.goto(base);await page.waitForSelector('.market-card');
+  assert.equal(await page.locator('#market-table-wrap').isHidden(),true);
+  await page.locator('#city').selectOption('1002');await page.locator('#tier').selectOption('4');await page.locator('#enchantment').selectOption('0');
+  await page.locator('#search').fill('T4_MAIN_NATURESTAFF_CRYSTAL');
+  await page.waitForFunction(()=>document.querySelectorAll('.market-card').length===1);
+  assert.equal(await page.locator('.market-card .quality-tile').count(),5);
+  assert.match(await page.locator('.market-card .q2').textContent(),/900/);
+  assert.match(await page.locator('.market-card .q5').textContent(),/Шедевр/);
+  assert.ok(await page.locator('.card-name').evaluate(e=>Number(getComputedStyle(e).fontWeight)>=600));
+  await page.getByRole('button',{name:'График и города',exact:true}).click();
+  await page.waitForSelector('#history-chart svg');assert.equal(await page.locator('#history-quality').inputValue(),'2');
+  assert.equal(await page.locator('#detail-prices .quality-tile').count(),5);
+  assert.match(await page.locator('#history-summary').textContent(),/≥/);
+  await page.locator('[data-period="672"]').click();
+  await page.waitForFunction(()=>document.querySelector('#history-summary').textContent.includes('/672 ч'));
+  assert.ok(await page.locator('#history-chart circle').count()>20);
+  if(artifacts)await page.screenshot({path:artifacts+'/quality-history-fixture.png',fullPage:true});
+  await page.locator('#history-quality').selectOption('5');await page.waitForSelector('.empty-history');
+  assert.equal(await page.locator('#history-chart svg').count(),0);
+  await page.locator('#history-quality').selectOption('2');await page.waitForSelector('#history-chart svg');
+  await page.locator('#history-custom').check();assert.ok(await page.locator('#history-custom-fields').isVisible());
+  const req=page.waitForResponse(r=>r.url().includes('/api/history?')&&r.url().includes('start='));await page.locator('#history-apply').click();assert.equal((await req).status(),200);
+  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.body.scrollWidth),390);
+  assert.ok(await page.locator('#item-dialog').evaluate(e=>e.getBoundingClientRect().width<=390));
+  await page.locator('#close-dialog').click();await page.setViewportSize({width:1512,height:982});
+  await page.locator('[data-view="craft"]').click();await page.waitForSelector('#craft-resources .craft-resource');
+  assert.equal(await page.locator('#craft-quality').inputValue(),'auto');
+  assert.equal(await page.locator('#craft-output .quality-tile').count(),5);
+  assert.ok(await page.locator('#craft-resources').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length>1));
+  await page.locator('[data-view="cloth"]').click();await page.waitForSelector('#cloth-rows tr');
+  assert.equal(await page.locator('#cloth-rows tr').count(),5);assert.equal(await page.locator('#cloth-return_rate').inputValue(),'53.9');
+  assert.equal(await page.locator('#cloth-coefficient').isDisabled(),true);
+  assert.equal(await page.locator('#cloth-steps').inputValue(),'5');
+  assert.equal(await page.locator('#cloth-rounding').inputValue(),'continuous');
+  await page.locator('#cloth-batch').fill('77');await page.locator('#cloth-batch').blur();
+  await page.locator('#cloth-return_rate').fill('50');await page.locator('#cloth-return_rate').blur();
+  await page.waitForFunction(()=>document.querySelector('#cloth-output').textContent==='151,6 шт.');
+  await page.locator('#cloth-mode').selectOption('coefficient');await page.waitForFunction(()=>!document.querySelector('#cloth-coefficient').disabled);
+  await page.locator('#cloth-mode').selectOption('finite');await page.waitForFunction(()=>document.querySelector('#cloth-output').textContent==='151,6 шт.');
+  const downloading=page.waitForEvent('download');await page.locator('#cloth-export').click();const download=await downloading;
+  assert.equal(download.suggestedFilename(),'Cloth-Calculator.xlsx');if(artifacts)await download.saveAs(artifacts+'/cloth-browser.xlsx');
+  if(artifacts)await page.screenshot({path:artifacts+'/cloth-calculator.png',fullPage:true});
+  await page.reload();await page.waitForSelector('.market-card');await page.locator('[data-view="cloth"]').click();await page.waitForSelector('#cloth-rows tr');
+  assert.equal(await page.locator('#cloth-batch').inputValue(),'77');assert.equal(await page.locator('#cloth-return_rate').inputValue(),'50');
+  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.body.scrollWidth),390);
+  if(artifacts)await page.screenshot({path:artifacts+'/cloth-mobile.png',fullPage:true});
+  const status=await(await page.request.get(base+'/api/private/status')).json();assert.equal(status.enabled,false);
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,allFiveQualities:true,masterpieceSeparate:true,chartAndCustomDates:true,gapsNotZero:true,clothEditSaveReloadExport:true,mobileWidth:390,javascriptErrors:0}));
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

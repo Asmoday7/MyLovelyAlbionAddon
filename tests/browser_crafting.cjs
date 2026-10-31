@@ -23,6 +23,7 @@ const inputs = ['T4_PLANKS', 'T4_CLOTH', 'T4_ARTEFACT_MAIN_NATURESTAFF_CRYSTAL']
   const quantities = () => page.locator('#craft-resources .resource-qty').allTextContents();
   try {
     await page.goto(base);
+    await page.locator('#layout-table').click();
     await page.waitForSelector('#rows tr');
     assert.equal(await page.evaluate(() => getComputedStyle(document.body).fontSize), '17px');
     assert.ok(await page.locator('#server').evaluate(n => n.getBoundingClientRect().height >= 46));
@@ -65,6 +66,7 @@ const inputs = ['T4_PLANKS', 'T4_CLOTH', 'T4_ARTEFACT_MAIN_NATURESTAFF_CRYSTAL']
     await page.locator('#craft-save').click();
     await page.waitForFunction(() => document.querySelectorAll('#craft-saved-list button').length === 1);
     await page.reload();
+    await page.locator('#layout-table').click();
     await page.waitForSelector('#rows tr');
     await page.locator('[data-view="craft"]').click();
     await page.locator('#craft-saved-list button').click();

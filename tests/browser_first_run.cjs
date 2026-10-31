@@ -31,6 +31,7 @@ const assert = require('node:assert/strict');
     const status = await (await page.request.get(base + '/api/status')).json();
     assert.ok(status.items > 1000);
     assert.equal(status.quotes, 0);
+    await page.locator('#layout-table').click();
     await page.locator('#example-crystal').click();
     await page.waitForFunction(() => document.querySelectorAll('#rows tr').length === 1);
     assert.match(await page.locator('#rows').textContent(), /Кристалл разлома \(знаток\)/);
