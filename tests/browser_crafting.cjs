@@ -98,8 +98,17 @@ const inputs = ['T4_PLANKS', 'T4_CLOTH', 'T4_ARTEFACT_MAIN_NATURESTAFF_CRYSTAL']
     assert.equal(await page.locator('#craft-cost').textContent(), 'Нужны цены');
     await post('/api/private/stop', {});
     receiverStarted = false;
+    // Reopening a saved pack changes the shared server selector. Returning to
+    // the market must reload prices for that server rather than keep old rows.
+    const westMarket = page.waitForResponse(r => r.url().includes('/api/market?server=west'));
+    await page.locator('#server').selectOption('west');
+    await westMarket;
+    await page.locator('#craft-saved-list button').click();
+    await page.waitForFunction(() => document.querySelector('#server').value === 'east');
     // An item can also open its pack directly from the price table.
+    const eastMarket = page.waitForResponse(r => r.url().includes('/api/market?server=east'));
     await page.locator('[data-view="market"]').click();
+    await eastMarket;
     await page.locator('#search').fill(staff);
     await page.waitForResponse(r => r.url().includes('/api/market?') && r.url().includes('search=' + staff));
     await page.locator('#rows .item-actions .quiet').first().click();

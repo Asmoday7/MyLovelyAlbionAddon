@@ -203,6 +203,7 @@ function showView(name,skipCraft=false) {
   $('notice').hidden = true; $('error-details').hidden = true;
   status().catch(showError);
   if (name==='craft'&&!skipCraft) crafting?.open().catch(showError);
+  if (name==='market') load().catch(showError); // A saved pack may have selected another server.
 }
 for (const button of document.querySelectorAll('[data-view]')) button.onclick = () => showView(button.dataset.view);
 for (const key of keys.filter(k => k !== 'search')) $(key).addEventListener('change', async () => { state.offset = 0; state.selected.clear(); try { await load(); } catch (e) { showError(e); } });
