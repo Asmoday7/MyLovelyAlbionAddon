@@ -1,0 +1,4 @@
+=== RUN   TestPrivateRoutingWire
+recording-sinks local=2 public-control=1 (positive control only)
+--- PASS: TestPrivateRoutingWire (0.02s)
+PASS

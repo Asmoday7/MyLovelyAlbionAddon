@@ -1,0 +1,12 @@
+49297 connect(8, {sa_family=AF_INET, sin_port=htons(36815), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+49300 connect(10, {sa_family=AF_INET, sin_port=htons(37533), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+49300 connect(12, {sa_family=AF_INET, sin_port=htons(55759), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+49297 connect(12, {sa_family=AF_INET, sin_port=htons(55759), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+49297 connect(12, {sa_family=AF_INET, sin_port=htons(55759), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+49302 +++ exited with 0 +++
+49303 +++ exited with 0 +++
+49300 +++ exited with 0 +++
+49299 +++ exited with 0 +++
+49298 +++ exited with 0 +++
+49301 +++ exited with 0 +++
+49297 +++ exited with 0 +++

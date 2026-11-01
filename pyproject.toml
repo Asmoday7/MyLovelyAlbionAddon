@@ -13,4 +13,7 @@ dependencies = []
 albion-trade-desk = "albion_trade_desk.__main__:main"
 
 [tool.setuptools.package-data]
-albion_trade_desk = ["static/*", "windows/*.ps1", "templates/*.json", "templates/*.xlsx"]
+albion_trade_desk = ["static/*", "windows/*.ps1", "windows/*.json", "templates/*.json", "templates/*.xlsx"]
+
+[tool.setuptools.packages.find]
+include = ["albion_trade_desk*"]

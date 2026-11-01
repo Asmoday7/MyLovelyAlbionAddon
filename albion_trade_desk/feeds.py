@@ -37,7 +37,7 @@ def validate_orders(payload):
         timestamp(row["Expires"])
 
 
-def market_history(store, payload, server, source, scaled=True):
+def market_history(store, payload, server, source, scaled=True, observed_at=None):
     """Keep all native scales, normalize only verified hourly scale, never invent daily bins."""
     region(server)
     if source not in SOURCES:
@@ -50,7 +50,7 @@ def market_history(store, payload, server, source, scaled=True):
     numeric, q, scale = integer(payload["AlbionId"]), integer(payload["QualityLevel"], 5), integer(payload["Timescale"], 2)
     if numeric == 0 or not str(payload["LocationId"]):
         raise ValueError("AlbionId и LocationId обязательны")
-    city, now = location(payload["LocationId"]), utcnow()
+    city, now = location(payload["LocationId"]), utcnow() if observed_at is None else timestamp(observed_at)
     if not isinstance(payload["MarketHistories"], list):
         raise ValueError("MarketHistories должен быть массивом")
     parsed = []
@@ -74,7 +74,7 @@ def market_history(store, payload, server, source, scaled=True):
             db.execute("""INSERT INTO native_history VALUES(?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(server,location,numeric_id,quality,timescale,ticks,source) DO UPDATE SET
                 quantity=excluded.quantity,silver=excluded.silver,received_at=excluded.received_at,
-                item_id=excluded.item_id""", (server, city, numeric, uid, q, scale, ticks, quantity, silver, now, source))
+                item_id=excluded.item_id WHERE excluded.received_at>=native_history.received_at""", (server, city, numeric, uid, q, scale, ticks, quantity, silver, now, source))
         ingestion.event(db, server, source, "native-history", len(parsed))
     resolve_history(store, source, server, numeric)
     return len(parsed)
@@ -103,7 +103,7 @@ def resolve_history(store, source=None, server=None, numeric=None):
                     row["received_at"], row["source"]))
 
 
-def ingest(store, topic, payload, server, source="private-client"):
+def ingest(store, topic, payload, server, source="private-client", observed_at=None):
     region(server)
     if source not in SOURCES:
         raise ValueError("Недопустимый источник")
@@ -115,9 +115,9 @@ def ingest(store, topic, payload, server, source="private-client"):
         elif topic != "marketorders.ingest":
             raise ValueError("Локальный клиент: только ingest")
         validate_orders(payload)
-        return ingestion.local_orders(store, payload, server, source, scaled=source == "private-client")
+        return ingestion.local_orders(store, payload, server, source, scaled=source == "private-client", observed_at=observed_at)
     if topic in ("markethistories.ingest", "markethistories.deduped"):
         if (source == "aodp-nats") != topic.endswith("deduped"):
             raise ValueError("Неверный формат источника истории")
-        return market_history(store, payload, server, source, scaled=source == "private-client")
+        return market_history(store, payload, server, source, scaled=source == "private-client", observed_at=observed_at)
     raise ValueError("Личные сообщения и прочие темы не принимаются")

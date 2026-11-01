@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -63,6 +64,13 @@ CREATE TABLE IF NOT EXISTS craft_packs (
 """
 
 
+def default_directory():
+    """Stable user data, independent of installer/extraction/current directory."""
+    if os.name == "nt":
+        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "AlbionTradeDesk"
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "albion-trade-desk"
+
+
 class Store:
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -100,9 +108,21 @@ class Store:
                     PRIMARY KEY(server,id,source))""")
                 db.execute("INSERT INTO orders SELECT *, 'data-client' FROM orders_v1")
                 db.execute("DROP TABLE orders_v1")
-            db.execute("PRAGMA user_version=2")
+            columns = {r["name"] for r in db.execute("PRAGMA table_info(orders)")}
+            for name, declaration in {
+                "raw_location": "TEXT NOT NULL DEFAULT ''", "market_type": "TEXT NOT NULL DEFAULT 'city'",
+                "enchantment": "INTEGER NOT NULL DEFAULT 0", "observed_at": "REAL NOT NULL DEFAULT 0",
+                "first_seen_at": "REAL NOT NULL DEFAULT 0",
+            }.items():
+                if name not in columns:
+                    db.execute(f"ALTER TABLE orders ADD COLUMN {name} {declaration}")
+            db.execute("UPDATE orders SET observed_at=received_at,first_seen_at=received_at,raw_location=location WHERE observed_at=0")
+            db.execute("CREATE INDEX IF NOT EXISTS orders_market ON orders(server,location,item_id,quality,side,source,observed_at)")
+            db.execute("PRAGMA user_version=3")
         with self.connect() as db:
             db.executescript(FEED_SCHEMA)
+            if 'orders_processed' not in {r['name'] for r in db.execute('PRAGMA table_info(private_sessions)')}:
+                db.execute('ALTER TABLE private_sessions ADD COLUMN orders_processed INTEGER NOT NULL DEFAULT 0')
 
     @contextmanager
     def connect(self):

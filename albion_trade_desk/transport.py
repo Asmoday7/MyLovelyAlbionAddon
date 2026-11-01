@@ -22,6 +22,8 @@ class HttpClient:
         self.lock, self.requests = threading.Lock(), deque()
 
     def get(self, url, ttl=900):
+        if getattr(self, 'enabled', None) is not None and not self.enabled():
+            raise ValueError('Публичные загрузки выключены. Включите их в разделе «Источники». Локальный сборщик от них не зависит.')
         with self.lock:
             with self.store.connect() as db:
                 cached = db.execute("SELECT body FROM http_cache WHERE url=? AND expires>?", (url, self.clock())).fetchone()

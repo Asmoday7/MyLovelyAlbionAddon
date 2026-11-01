@@ -60,9 +60,12 @@ def column(index):
 
 
 def xlsx_bytes(rows):
+    return table_xlsx([list(COLUMNS), *records(rows)])
+
+
+def table_xlsx(data, sheet_name="{escape(sheet_name)}"):
     ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     sheet = [f'<worksheet xmlns="{ns}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" state="frozen"/></sheetView></sheetViews><sheetData>']
-    data = [list(COLUMNS), *records(rows)]
     for r, record in enumerate(data, 1):
         sheet.append(f'<row r="{r}">')
         for c, value in enumerate(record, 1):
@@ -76,12 +79,12 @@ def xlsx_bytes(rows):
             else:
                 sheet.append(f'<c r="{ref}" t="inlineStr"><is><t xml:space="preserve">{escape(str(value))}</t></is></c>')
         sheet.append('</row>')
-    sheet.append(f'</sheetData><autoFilter ref="A1:{column(len(COLUMNS))}{len(data)}"/></worksheet>')
+    sheet.append(f'</sheetData><autoFilter ref="A1:{column(len(data[0]))}{len(data)}"/></worksheet>')
     stream = io.BytesIO()
     with ZipFile(stream, "w", ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", '''<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>''')
         z.writestr("_rels/.rels", '''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>''')
-        z.writestr("xl/workbook.xml", f'<workbook xmlns="{ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="MarketPrices" sheetId="1" r:id="rId1"/></sheets></workbook>')
+        z.writestr("xl/workbook.xml", f'<workbook xmlns="{ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="{escape(sheet_name)}" sheetId="1" r:id="rId1"/></sheets></workbook>')
         z.writestr("xl/_rels/workbook.xml.rels", '''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>''')
         z.writestr("xl/worksheets/sheet1.xml", "".join(sheet))
     return stream.getvalue()

@@ -3,14 +3,18 @@ import json
 import logging
 import sys
 import webbrowser
-from .storage import Store
+import sqlite3
+from pathlib import Path
+from contextlib import closing
+from .storage import Store, default_directory
+from .instance import InstanceLock
 from .transport import HttpClient, sync_catalog, probe
 
 
 def main():
     parser = argparse.ArgumentParser(description="Albion Trade Desk — локальная экономическая аналитика")
     parser.add_argument("command", choices=("serve", "sync-catalog", "probe", "status"), nargs="?", default="serve")
-    parser.add_argument("--data-dir", default="data")
+    parser.add_argument("--data-dir", default=str(default_directory()))
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--server", default="east", choices=("east", "west", "europe"))
     parser.add_argument("--open", action="store_true", help="Открыть браузер")
@@ -18,8 +22,18 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s" if args.verbose else "%(message)s")
-    store = Store(args.data_dir)
+    directory = Path(args.data_dir)
+    lock = InstanceLock(directory)
     try:
+        if args.command == "serve":
+            lock.acquire()
+        # Carry an old source-install database forward once, including its live WAL.
+        legacy = Path.cwd() / 'data' / 'trade-desk.sqlite3'
+        if directory == default_directory() and not (directory / 'trade-desk.sqlite3').exists() and legacy.exists():
+            directory.mkdir(parents=True, exist_ok=True)
+            with closing(sqlite3.connect(legacy)) as source, closing(sqlite3.connect(directory / 'trade-desk.sqlite3')) as target:
+                source.backup(target)
+        store = Store(directory)
         if args.command == "serve":
             from .web import make_server
             from .server_socket import available_server
@@ -30,7 +44,7 @@ def main():
             print("\nAlbion Trade Desk запущен.", flush=True)
             print("Адрес приложения: " + address, flush=True)
             print("Окно можно свернуть. Все действия выполняйте в браузере.", flush=True)
-            print("Первый запуск: нажмите «Загрузить список предметов» в приложении.", flush=True)
+            print("Первый запуск: откройте «Мои наблюдения» и нажмите «Запустить сборщик».", flush=True)
             print("Для остановки нажмите Ctrl+C.\n", flush=True)
             if args.open:
                 webbrowser.open(address)
@@ -39,10 +53,7 @@ def main():
             except KeyboardInterrupt:
                 pass
             finally:
-                server.private_scanner.stop()
-                server.public_nats.stop()
                 server.server_close()
-                server.jobs.executor.shutdown(wait=True, cancel_futures=True)
         elif args.command == "status":
             print(json.dumps(store.status(), indent=2, ensure_ascii=False))
         else:
@@ -52,6 +63,8 @@ def main():
     except Exception as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return 1
+    finally:
+        lock.close()
     return 0
 
 

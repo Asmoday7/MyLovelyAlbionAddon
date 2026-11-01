@@ -7,3 +7,7 @@ data/
 *.db-wal
 .pytest_cache/
 .DS_Store
+
+build/
+dist/
+*.egg-info/

@@ -1,0 +1,26 @@
+name: Windows application
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Native Windows tests including SQLite cleanup and PowerShell syntax
+        run: python -m unittest discover -s tests -v
+      - run: python -m pip install pyinstaller==6.16.0
+      - run: python -m PyInstaller --noconfirm AlbionTradeDesk.spec
+      - name: Frozen application smoke
+        shell: pwsh
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP 'trade-desk-build-check'
+          & .\dist\AlbionTradeDesk.exe status --data-dir $folder
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen application failed' }
+          Remove-Item -Recurse -Force $folder
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlbionTradeDesk-Windows-x64
+          path: dist/AlbionTradeDesk.exe

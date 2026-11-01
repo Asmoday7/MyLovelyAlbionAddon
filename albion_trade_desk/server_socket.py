@@ -8,6 +8,13 @@ class LoopbackHTTPServer(ThreadingHTTPServer):
     # HTTPServer defaults to SO_REUSEADDR. On Windows this can allow two servers
     # to bind the same address, so a browser may reach AnkiConnect instead of us.
     allow_reuse_address = False
+    daemon_threads = False
+    block_on_close = True
+
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(10)
+        return connection, address
 
     def server_bind(self):
         if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):

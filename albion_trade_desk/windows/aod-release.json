@@ -1,0 +1,8 @@
+{
+  "version": "0.1.61",
+  "source_commit": "c6edd9456bec4657755c25f173e8ebc7a31a17f7",
+  "asset_url": "https://github.com/ao-data/albiondata-client/releases/download/0.1.61/update-windows-amd64.exe.gz",
+  "asset_sha256": "c5ed4c046be7d7dc5c4f07bfd88ed05a10199a24ae63fbeb554aea512aac3f02",
+  "windows_x64_sha256": "4feb2e2dd3c5e2e65f494581e3e5076b394a41bf777c936bc1bdfcc26fd1229c",
+  "verification": "GitHub release asset SHA256 verified before decompressing for executable hash; never executed."
+}

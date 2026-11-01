@@ -1,8 +1,8 @@
-# Downloaded from the LOCAL Trade Desk UI after explicit experimental opt-in.
+﻿# Downloaded from the LOCAL Trade Desk UI after explicit experimental opt-in.
 # No changes to the game, no packet capture implementation, no personal ingest.
 $ErrorActionPreference = 'Stop'
-$destination = '@@DESTINATION@@'
-$sessionId = '@@SESSION_ID@@'
+$destination = if ($managed) { $managed.destination } else { '@@DESTINATION@@' }
+$sessionId = if ($managed) { $managed.session_id } else { '@@SESSION_ID@@' }
 Add-Type -AssemblyName System.Windows.Forms
 if ($destination -eq '@@' + 'DESTINATION@@' -or $destination -notmatch '^http://127\.0\.0\.1:[0-9]{1,5}/private/(east|west|europe)/[A-Za-z0-9_-]+$') {
     throw 'Download this launcher from the active Private Market Scanner session first.'
@@ -22,10 +22,21 @@ $rule = $null
 $journal = $null
 $sessionDir = $null
 $failure = $null
+$protectionActive = $false
+$npcapAvailable = $false
 function Write-Audit($kind, $detail) {
     if ($journal) {
         @{ at = [DateTime]::UtcNow.ToString('o'); kind = $kind; detail = $detail } |
             ConvertTo-Json -Compress -Depth 5 | Add-Content -LiteralPath $journal -Encoding UTF8
+    }
+}
+function Set-ManagedState($state, $errorText) {
+    if ($managed) {
+        $data = @{state=$state; error=$errorText; pid=$(if($child){$child.Id}else{$null});
+            sha256=$hash; client_path=$script:client; firewall_active=$protectionActive; npcap=$npcapAvailable}
+        $tmp = Join-Path $managed.folder 'state.tmp'
+        $data | ConvertTo-Json | Set-Content -LiteralPath $tmp -Encoding UTF8
+        Move-Item -LiteralPath $tmp -Destination (Join-Path $managed.folder 'state.json') -Force
     }
 }
 function Other-Clients($ignorePid = 0) {
@@ -35,16 +46,27 @@ function Other-Clients($ignorePid = 0) {
     })
 }
 try {
+    $script:client = if ($managed) { $managed.client_path } else { '' }
+    if (-not $client -or -not (Test-Path -LiteralPath $client)) {
     $picker = New-Object System.Windows.Forms.OpenFileDialog
     $picker.Title = 'Select the installed OFFICIAL albiondata-client.exe (not an installer)'
     $picker.Filter = 'Official Data Client (*.exe)|*.exe'
-    if ($picker.ShowDialog() -ne 'OK') { throw 'No client selected.' }
+    if ($picker.ShowDialog() -ne 'OK') { throw 'Файл AOD не выбран. Повторите запуск и выберите установленный клиент.' }
     $script:client = (Resolve-Path -LiteralPath $picker.FileName).ProviderPath
+    }
+    if ($managed -and (Test-Path -LiteralPath (Join-Path $managed.folder 'stop'))) { throw 'Launch cancelled.' }
+    $npcapAvailable = Test-Path -LiteralPath (Join-Path $env:SystemRoot 'System32/Npcap/wpcap.dll')
+    if (-not $npcapAvailable) {
+        throw 'Npcap не найден. Установите Npcap с https://npcap.com/#download, затем повторите запуск сборщика.'
+    }
+    $expectedHash = if ($managed) { $managed.sha256 } else { '4feb2e2dd3c5e2e65f494581e3e5076b394a41bf777c936bc1bdfcc26fd1229c' }
+    $verified = (Get-FileHash -LiteralPath $client -Algorithm SHA256).Hash
+    if ($verified -ne $expectedHash) { throw 'Файл не совпадает с проверенным AOD 0.1.61 x64. Выберите установленный exe официального релиза 0.1.61. Клиент не запущен.' }
     if ([IO.Path]::GetFileName($client) -notmatch '(?i)^albiondata-client.*\.exe$' -or $client -match '(?i)installer\.exe$') {
         throw 'Select the installed official client executable, not its installer or a renamed copy.'
     }
     if ((Other-Clients).Count -gt 0) {
-        throw 'An Albion Data Client is already running. Close it, including its tray icon, then try again.'
+        throw 'AOD уже запущен. Закройте его, включая значок в трее, затем повторите запуск. Чужой процесс не остановлен.'
     }
     $tasks = @(Get-ScheduledTask | Where-Object {
         $_.State -ne 'Disabled' -and
@@ -58,8 +80,8 @@ try {
     if (@(Get-NetFirewallProfile | Where-Object { -not $_.Enabled }).Count -gt 0) {
         throw 'Windows Firewall profiles must be enabled. No client was started.'
     }
-    $sessionDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('AlbionTradeDesk\PrivateScanner\' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $sessionDir | Out-Null
+    $sessionDir = if ($managed) { $managed.folder } else { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('AlbionTradeDesk\PrivateScanner\' + [guid]::NewGuid().ToString('N')) }
+    New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
     $journal = Join-Path $sessionDir 'network-audit.jsonl'
     $hash = (Get-FileHash -LiteralPath $client -Algorithm SHA256).Hash
     Write-Audit 'preflight' @{ client = $client; sha256 = $hash; rules_permission = 'unconfirmed'; live_game_verified = $false }
@@ -77,6 +99,7 @@ try {
     foreach ($range in $remote) {
         if ($address.RemoteAddress -notcontains $range) { throw 'Firewall address filter could not be verified.' }
     }
+    $protectionActive = $true
     Write-Audit 'firewall-active' @{ rule = $rule; remote_ranges = $remote }
     $health = Invoke-RestMethod -Uri ($baseAddress + '/api/private/status') -TimeoutSec 3
     if (-not $health.enabled -or $health.id -ne $sessionId) { throw 'This receiver session has ended. Download a new launcher.' }
@@ -84,12 +107,15 @@ try {
     # DisableUpload would also stop delivery to the local HTTP receiver.
     $arguments = @('-i', $destination, '-p=')
     Write-Audit 'launch-policy' @{ destination = 'loopback-only'; personalized_ingest = 'empty'; websocket = $false; disable_upload = $false }
+    if ($managed -and (Test-Path -LiteralPath (Join-Path $sessionDir 'stop'))) { throw 'Launch cancelled.' }
     $child = Start-Process -FilePath $client -ArgumentList $arguments -WorkingDirectory $sessionDir -PassThru
     Write-Host 'Private client started. Keep this window open. Close it with Ctrl+C to stop the client.'
     Write-Host ('Local audit folder: ' + $sessionDir)
     Write-Host 'Network verification is not certified; see docs/PRIVATE_SCANNER.md.'
     $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    Set-ManagedState 'waiting' $null
     while (-not $child.HasExited) {
+        if ($managed -and (Test-Path -LiteralPath (Join-Path $sessionDir 'stop'))) { break }
         if ((Other-Clients $child.Id).Count -gt 0) { throw 'Another Data Client was detected. Stopping this private client.' }
         $currentRule = Get-NetFirewallRule -PolicyStore ActiveStore -Name $rule
         if ($currentRule.Enabled -ne 'True' -or $currentRule.Action -ne 'Block') { throw 'Firewall protection was changed.' }
@@ -117,7 +143,9 @@ try {
         Start-Sleep -Milliseconds 250
         $child.Refresh()
     }
-    Write-Audit 'process-exit' @{ exit_code = $child.ExitCode }
+    if (-not ($managed -and (Test-Path -LiteralPath (Join-Path $sessionDir 'stop')))) {
+        throw 'AOD exited. See the local log; capture may require Npcap or WebView2.'
+    }
 } catch {
     $failure = $_.Exception.Message
     Write-Audit 'error' @{ message = $_.Exception.Message }
@@ -131,18 +159,22 @@ try {
     if ($rule -and $safeToRemoveRule) {
         try {
             Remove-NetFirewallRule -Name $rule -ErrorAction Stop
+            $protectionActive = $false
             Write-Audit 'cleanup' @{ firewall_rule_removed = $true }
         } catch {
+            $failure = 'Не удалось снять защитное правило после остановки. Имя правила и причина сохранены в журнале.'
             Write-Audit 'cleanup' @{ firewall_rule_removed = $false; rule = $rule; reason = $_.Exception.Message }
             Write-Warning ('Check the retained protection rule manually: ' + $rule)
         }
     } elseif ($rule) {
+        $failure = 'Остановка AOD не подтверждена. Защитное правило сохранено; проверьте журнал.'
         Write-Audit 'cleanup' @{ firewall_rule_retained = $rule; reason = 'client exit not confirmed' }
         Write-Warning ('Protection rule was retained because client exit is unknown: ' + $rule)
     }
+    Set-ManagedState $(if ($failure) { 'error' } else { 'disabled' }) $failure
     $mutex.ReleaseMutex()
     $mutex.Dispose()
 }
-if ($failure) {
+if ($failure -and -not $managed) {
     [System.Windows.Forms.MessageBox]::Show($failure, 'Private Scanner stopped') | Out-Null
 }

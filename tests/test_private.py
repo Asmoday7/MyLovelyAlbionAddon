@@ -1,3 +1,4 @@
+from contextlib import closing
 import io
 import json
 import os
@@ -168,7 +169,7 @@ class MigrationTests(unittest.TestCase):
     def test_v1_history_and_order_data_survive_source_key_migration_and_repeat_open(self):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'trade-desk.sqlite3'
-            with sqlite3.connect(p) as db:
+            with closing(sqlite3.connect(p)) as db:
                 db.executescript('''CREATE TABLE history(server TEXT,location TEXT,item_id TEXT,quality INTEGER,start REAL,
                     seconds INTEGER,quantity INTEGER,average REAL,received_at REAL,source TEXT,
                     PRIMARY KEY(server,location,item_id,quality,start,seconds));
@@ -181,7 +182,7 @@ class MigrationTests(unittest.TestCase):
             self.assertTrue((Path(directory)/'before-private-scanner-v2.sqlite3').exists())
             store=Store(directory)
             with store.connect() as db:
-                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],2)
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],3)
                 self.assertEqual(db.execute('SELECT quantity FROM history').fetchone()[0],5)
                 self.assertEqual(db.execute('SELECT source FROM orders').fetchone()[0],'data-client')
 

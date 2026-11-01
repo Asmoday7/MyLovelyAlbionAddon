@@ -1,12 +1,13 @@
 """Validated market inputs. A partial scan is never a complete order book."""
-from collections import defaultdict
+import re
 from .domain import region, quality, location, number, timestamp, utcnow
 
 
 def put_quote(db, server, city, item, q, kind, price, observed, received, source, limitation):
     if price <= 0 or observed < 946684800 or observed > received + 300:
         return 0  # AODP zero and year 0001 mean missing, not a free item.
-    db.execute("INSERT OR IGNORE INTO market_snapshots VALUES(?,?,?,?,?,?,?,?,?,?)",
+    if source != "private-client":
+        db.execute("INSERT OR IGNORE INTO market_snapshots VALUES(?,?,?,?,?,?,?,?,?,?)",
                (server, city, item, q, kind, price, observed, received, source, limitation))
     db.execute("""INSERT INTO quotes VALUES(?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(server,location,item_id,quality,kind,source) DO UPDATE SET
@@ -19,6 +20,7 @@ def put_quote(db, server, city, item, q, kind, price, observed, received, source
 def event(db, server, source, kind, count, detail=""):
     db.execute("INSERT INTO events(at,server,source,kind,count,detail) VALUES(?,?,?,?,?,?)",
                (utcnow(), server, source, kind, count, detail))
+    db.execute("DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id DESC LIMIT -1 OFFSET 2000)")
 
 
 def prices(store, payload, server="east", source="aodp-rest"):
@@ -69,13 +71,17 @@ def history(store, payload, server="east", seconds=3600, source="aodp-rest"):
     return count
 
 
-def local_orders(store, payload, server="east", source="data-client", scaled=True):
+def local_orders(store, payload, server="east", source="data-client", scaled=True, observed_at=None):
     region(server)
-    now, groups, count = utcnow(), defaultdict(list), 0
+    now, groups, count = utcnow(), set(), 0
+    observed = timestamp(observed_at) if observed_at is not None else now
+    if observed > now + 300 or observed < 946684800:
+        raise ValueError("Некорректное время получения")
     rows = payload["Orders"]
     if not isinstance(rows, list):
         raise ValueError("Orders должен быть массивом")
     with store.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
         for row in rows:
             side = row["AuctionType"]
             if side not in ("offer", "request"):
@@ -90,18 +96,44 @@ def local_orders(store, payload, server="east", source="data-client", scaled=Tru
             city, q = location(row["LocationId"]), quality(row["QualityLevel"])
             if not city:
                 raise ValueError("LocationId обязателен")
-            db.execute("""INSERT INTO orders VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(server,id,source)
+            previous = db.execute("SELECT item_id,location,quality,side FROM orders WHERE server=? AND id=? AND source=?",
+                                  (server, str(row["Id"]), source)).fetchone()
+            if previous and tuple(previous) != (uid, city, q, side):
+                raise ValueError("Идентификатор ордера конфликтует с предметом, рынком или качеством")
+            changed = db.execute("""INSERT INTO orders
+                (server,id,item_id,location,quality,side,price,amount,expires,received_at,source,
+                 raw_location,market_type,enchantment,observed_at,first_seen_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(server,id,source)
                 DO UPDATE SET price=excluded.price,amount=excluded.amount,expires=excluded.expires,
-                received_at=excluded.received_at""",
-                       (server, str(row["Id"]), uid, city, q, side, price, amount, expires, now, source))
-            if expires > now and amount > 0 and price > 0:
-                groups[(city, uid, q, side)].append(price)
+                received_at=excluded.received_at,observed_at=excluded.observed_at,
+                raw_location=excluded.raw_location,enchantment=excluded.enchantment
+                WHERE excluded.observed_at>=orders.observed_at""",
+                (server, str(row["Id"]), uid, city, q, side, price, amount, expires, now, source,
+                 str(row["LocationId"]), "black-market" if city == "3003" else "city" if city in ("7","1002","2004","3008","4002","3005","5003") else "other",
+                 enchant, observed, observed)).rowcount
+            if not changed:
+                continue
+            # Offline scanning works even before a catalogue has been downloaded.
+            match = re.match(r"^T(\d+)_", uid)
+            db.execute("""INSERT OR IGNORE INTO items(id,name_ru,name_en,tier,enchantment,category,search,catalog_at)
+                VALUES(?,?,?,?,?,'',?,0)""", (uid, uid, uid, int(match[1]) if match else 0, enchant, uid.casefold()))
+            groups.add((city, uid, q, side))
             count += 1
-        for (city, uid, q, side), values in groups.items():
-            put_quote(db, server, city, uid, q,
-                      "sell_price_min" if side == "offer" else "buy_price_max",
-                      min(values) if side == "offer" else max(values), now, now,
-                      source, "partial scan; observation time is local receipt; depth unknown")
+        for city, uid, q, side in groups:
+            kind = "sell_price_min" if side == "offer" else "buy_price_max"
+            best = db.execute("""SELECT price,observed_at FROM orders WHERE server=? AND location=? AND item_id=?
+                AND quality=? AND side=? AND source=? AND expires>? AND amount>0 AND price>0
+                ORDER BY price """ + ("ASC" if side == "offer" else "DESC") + ",observed_at DESC LIMIT 1",
+                (server, city, uid, q, side, source, now)).fetchone()
+            # A changed best order may legitimately have an older observation time.
+            # Rebuild this projection from durable last-known orders, never delete unseen orders.
+            db.execute("DELETE FROM quotes WHERE server=? AND location=? AND item_id=? AND quality=? AND kind=? AND source=?",
+                       (server, city, uid, q, kind, source))
+            if best:
+                put_quote(db, server, city, uid, q, kind, best["price"], best["observed_at"], now,
+                          source, "partial scan; observation time is local receipt; depth unknown")
+        # Expiry is explicit, unlike disappearance from an incomplete page. Keep a short grace period.
+        db.execute("DELETE FROM orders WHERE source=? AND server=? AND expires<?", (source, server, now-7*86400))
         event(db, server, source, "orders", count)
     return count
 

@@ -1,0 +1,15 @@
+{
+  "scope": "synthetic loopback experiment, NOT full Windows client/game",
+  "upstream_commit": "c6edd9456bec4657755c25f173e8ebc7a31a17f7",
+  "upstream_files_sha256": {
+    "dispatcher.go": "64294b3512c14185d6e2e5af2aa31c45df597b707bde64aa0df03e0f60ca7e3b",
+    "uploader_http.go": "139bb034278c6911e81700cf9dc7ebccce261cb8d2d39bbe74b56ea52ad566a7"
+  },
+  "routing_tests_passed": true,
+  "socket_trace_loopback_only": true,
+  "inet_connect_calls": 5,
+  "sqlite_bridge_passed": true,
+  "windows_firewall_tested": false,
+  "live_game_tested": false,
+  "sbi_permission_confirmed": false
+}

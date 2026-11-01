@@ -5,13 +5,14 @@ import sqlite3
 import tempfile
 import threading
 import uuid
+from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler
 from .server_socket import LoopbackHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from . import __version__, analytics, ingestion, crafting, history_view, refining
-from .domain import SERVERS, MARKETS, quality, region, location
+from .domain import SERVERS, MARKETS, quality, region, location, utcnow
 from .export import csv_bytes, xlsx_bytes
 from .transport import HttpClient, sync_catalog, refresh_market
 from .private_scanner import PrivateScanner
@@ -68,6 +69,11 @@ class Jobs:
 def make_server(store, port=8765):
     jobs, client = Jobs(), HttpClient(store)
     private, nats = None, PublicNats(store)
+    def public_enabled():
+        with store.connect() as db:
+            row = db.execute("SELECT value FROM user_settings WHERE key='public_api_enabled'").fetchone()
+        return bool(row and json.loads(row[0]) is True)
+    client.enabled = public_enabled
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -108,9 +114,25 @@ def make_server(store, port=8765):
                         categories = [r[0] for r in db.execute("SELECT DISTINCT category FROM items ORDER BY category")]
                     self.respond({**store.status(), "servers": list(SERVERS), "markets": MARKETS,
                                   "version": __version__, "categories": categories, "filters": store.settings(),
-                                  "private_scanner": private.status(), "public_nats": nats.status(), "active_job": jobs.current()})
+                                  "public_api_enabled": public_enabled(), "private_scanner": private.status(), "public_nats": nats.status(), "active_job": jobs.current()})
                 elif path == "/api/private/status":
                     self.respond(private.status())
+                elif path == "/api/private/logs":
+                    self.respond({'lines': private.process.logs()})
+                elif path in ("/api/private/orders", "/api/private/orders.xlsx"):
+                    clauses, values = ["source='private-client'", "server=?"], [region(query.get('server','east'))]
+                    if query.get('city'):
+                        clauses.append('location=?'); values.append(location(query['city']))
+                    if query.get('quality') and query['quality'] != 'all':
+                        clauses.append('quality=?'); values.append(quality(query['quality']))
+                    with store.connect() as db:
+                        rows = [dict(r) for r in db.execute('SELECT * FROM orders WHERE '+' AND '.join(clauses)+' ORDER BY observed_at DESC LIMIT ?', (*values, 100000 if path.endswith('xlsx') else 200))]
+                    if path.endswith('xlsx'):
+                        from .export import table_xlsx
+                        columns = list(rows[0]) if rows else ['server','id','item_id','location','quality','side','price','amount','expires','observed_at','received_at']
+                        self.respond(table_xlsx([columns]+[[r[c] for c in columns] for r in rows], 'Orders'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename='My-Market-Orders.xlsx')
+                    else:
+                        self.respond({'rows': rows})
                 elif path == "/api/private/launcher":
                     self.respond(private.launcher(), content_type="application/octet-stream", filename="Start-PrivateScanner.ps1")
                 elif path == "/api/private/history":
@@ -158,7 +180,7 @@ def make_server(store, port=8765):
                 elif path == "/api/backup":
                     with tempfile.TemporaryDirectory() as directory:
                         p = Path(directory) / "backup.sqlite3"
-                        with store.connect() as source, sqlite3.connect(p) as target:
+                        with store.connect() as source, closing(sqlite3.connect(p)) as target:
                             source.backup(target)
                         self.respond(p.read_bytes(), content_type="application/vnd.sqlite3", filename="trade-desk-backup.sqlite3")
                 else:
@@ -174,6 +196,7 @@ def make_server(store, port=8765):
                 self.respond({"error": "Внутренняя ошибка; подробности в журнале сервера"}, 500)
 
         def do_POST(self):
+            received_at = utcnow()
             if not self.trusted():
                 self.respond({"error": "Недопустимый Host/Origin"}, 403)
                 return
@@ -208,6 +231,17 @@ def make_server(store, port=8765):
                     if cfg['scope']=='private':
                         raise ValueError('Для собственных цен используйте локальный сканер. Общие цены — отдельный источник')
                     self.respond(jobs.submit(lambda: crafting.refresh(client,cfg),'craft'),202)
+                elif path == "/api/settings/public-api":
+                    if type(body.get('enabled')) is not bool:
+                        raise ValueError('enabled должен быть boolean')
+                    with store.connect() as db:
+                        db.execute("INSERT OR REPLACE INTO user_settings VALUES('public_api_enabled',?)", (json.dumps(body['enabled']),))
+                    self.respond({'enabled': public_enabled()})
+                elif path == "/api/app/stop":
+                    self.respond({'ok':True})
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+                elif path == "/api/private/launch":
+                    self.respond(private.launch(body.get('server','east'), body.get('experimental_ack')))
                 elif path == "/api/private/start":
                     self.respond(private.start(body.get("server", "east"), body.get("experimental_ack")))
                 elif path == "/api/private/stop":
@@ -220,7 +254,7 @@ def make_server(store, port=8765):
                     parts = path.strip('/').split('/')
                     if len(parts) != 4:
                         raise ValueError("Неверный адрес приватной сессии")
-                    self.respond(private.receive(parts[1], parts[2], parts[3], body))
+                    self.respond(private.receive(parts[1], parts[2], parts[3], body, observed_at=received_at))
                 elif path == "/api/catalog/sync":
                     self.respond(jobs.submit(lambda: sync_catalog(client), "catalog"), 202)
                 elif path == "/api/market/refresh":
@@ -285,6 +319,13 @@ def make_server(store, port=8765):
 
     server = LoopbackHTTPServer(("127.0.0.1", port), Handler)
     private = PrivateScanner(store, server.server_port)
+    original_close = server.server_close
+    def close():
+        private.stop()
+        nats.stop()
+        original_close()
+        jobs.executor.shutdown(wait=True, cancel_futures=True)
+    server.server_close = close
     server.jobs = jobs
     server.private_scanner, server.public_nats = private, nats
     return server

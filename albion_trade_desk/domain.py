@@ -28,7 +28,14 @@ def timestamp(value):
 
 
 def location(value):
-    text = str(value)
+    text = str(value).strip()
+    # Native AOD locations differ from normalized REST locations. Preserve unknowns.
+    if text.endswith('-Auction2'):
+        text = text.removesuffix('-Auction2')
+    if text.isdecimal():
+        text = str(int(text))
+    text = {"301":"7", "1301":"1002", "2301":"2004", "3301":"3008",
+            "4301":"4002", "3013":"3005"}.get(text, text)
     return next((k for k, v in MARKETS.items() if v.casefold() == text.casefold()), text)
 
 

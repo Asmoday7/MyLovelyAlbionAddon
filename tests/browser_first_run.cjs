@@ -22,6 +22,7 @@ const assert = require('node:assert/strict');
     assert.equal(await page.evaluate(() => document.body.scrollWidth), 390);
     if (artifacts) await page.screenshot({path: artifacts + '/first-run-mobile.png', fullPage: true});
     await page.setViewportSize({width: 1512, height: 982});
+    await page.request.post(base+'/api/settings/public-api',{data:{enabled:true}});
     await page.locator('#setup-sync').click();
     await page.waitForFunction(() => !document.querySelector('#job-progress').hidden);
     assert.equal(await page.locator('#setup-sync').isDisabled(), true);

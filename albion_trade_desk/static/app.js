@@ -106,8 +106,8 @@ function renderOnboarding() {
   const own = $('scope').value === 'private';
   $('onboarding').classList.toggle('ready', ready);
   $('onboarding-label').textContent = !ready ? 'Первый запуск · шаг 1 из 3' : own ? 'Ваши наблюдения' : hasPrice ? 'Данные доступны' : hasTarget ? 'Осталось загрузить цены · шаг 3 из 3' : 'Список готов · шаг 2 из 3';
-  $('onboarding-title').textContent = !ready ? 'Сначала загрузим список предметов' : hasPrice ? 'Теперь можно сравнивать цены' : own ? 'Собственные цены поступают из Data Client' : hasTarget ? 'Предмет найден. Теперь узнайте цену' : 'Начнём с одного знакомого предмета';
-  $('onboarding-text').textContent = !ready ? 'Пока список пуст, выбирать нечего. Одна кнопка загрузит названия предметов и рецепты. Игра и Data Client для этого не нужны.' : hasPrice ? 'Нажмите название предмета для сравнения городов. Обращайте внимание на давность и источник: цена может устареть.' : own ? 'Сейчас выбраны только ваши данные. Для их получения проверьте подключение в «Мои наблюдения». Общие цены можно показать отдельно кнопкой ниже.' : hasTarget ? 'Проверьте город и качество. Нажмите «Узнать цену» справа в строке предмета. Галочка нужна только для загрузки нескольких предметов сразу.' : `В списке ${fmt(state.catalog)} предметов. Найдите свой через поиск ниже или нажмите пример. Затем выберите город и нажмите «Узнать цену» в строке предмета.`;
+  $('onboarding-title').textContent = !ready ? 'Начните локальный сбор или загрузите каталог' : hasPrice ? 'Теперь можно сравнивать цены' : own ? 'Собственные цены поступают из Data Client' : hasTarget ? 'Предмет найден. Теперь узнайте цену' : 'Начнём с одного знакомого предмета';
+  $('onboarding-text').textContent = !ready ? 'Локальный сбор работает без каталога и Интернета. Для русских названий и рецептов можно отдельно разрешить публичные загрузки в разделе «Источники».' : hasPrice ? 'Нажмите название предмета для сравнения городов. Обращайте внимание на давность и источник: цена может устареть.' : own ? 'Сейчас выбраны только ваши данные. Для их получения проверьте подключение в «Мои наблюдения». Общие цены можно показать отдельно кнопкой ниже.' : hasTarget ? 'Проверьте город и качество. Нажмите «Узнать цену» справа в строке предмета. Галочка нужна только для загрузки нескольких предметов сразу.' : `В списке ${fmt(state.catalog)} предметов. Найдите свой через поиск ниже или нажмите пример. Затем выберите город и нажмите «Узнать цену» в строке предмета.`;
   $('step-prices').querySelector('strong').textContent = own ? 'Получить свои наблюдения' : 'Нажать «Узнать цену»';
   $('step-prices').querySelector('small').textContent = own ? 'Через настроенный Data Client' : 'Прямо в строке нужного предмета';
   for (const [id, done, current] of [['step-catalog', ready, !ready], ['step-search', hasTarget, ready && !hasTarget], ['step-prices', hasPrice, hasTarget]]) {
@@ -141,6 +141,7 @@ async function status() {
     const row = el('div', null, 'event'); row.append(el('span', `${event.server.toUpperCase()} · ${event.source} / ${event.kind} · ${fmt(event.count)} записей`), el('span', date(event.at))); $('events').append(row);
   }
   if (!data.events.length) $('events').append(el('p', 'Рыночных обновлений пока нет. Каталог не содержит цен.', 'muted'));
+  $('public-api-enabled').checked = data.public_api_enabled;
   renderPrivate(data.private_scanner);
   const nats = data.public_nats;
   const natsNames = {disabled: 'Выключен', connecting: 'Подключение…', connected: 'Подключён', error: 'Нет подключения'};
@@ -153,18 +154,24 @@ async function status() {
   return data;
 }
 function renderPrivate(p) {
-  state.privateEnabled = p.enabled;
-  const names = {disabled: 'Выключен', waiting: 'Приёмник включён · ожидание пакетов', receiving: 'Недавно получены пакеты'};
-  $('private-state').textContent = `${names[p.connection]}${p.server ? ' · ' + p.server.toUpperCase() : ''}`;
-  $('private-counts').textContent = `В сессии: ${p.packets || 0} пакетов · ${p.records || 0} записей с обновлениями · ${p.duplicates || 0} повторных пакетов · ${p.rejected || 0} отклонено. В базе: ${p.own_orders} своих заявок, ${p.own_native_history} точек истории; без названия: ${p.unmapped_history}.`;
+  state.privateEnabled = p.enabled || p.process?.active;
+  const names = {disabled: 'Выключен', starting: 'Запускается · ожидается Windows', waiting: 'Ожидание рыночных данных', receiving: 'Работает · получены данные', error: 'Ошибка'};
+  $('private-state').textContent = `${names[p.state || p.connection]}${p.server ? ' · ' + p.server.toUpperCase() : ''}`;
+  $('private-counts').textContent = `Ордеров обработано: ${p.orders_processed || 0} · уникальных на сервере: ${p.unique_orders || 0}. В сессии: ${p.packets || 0} пакетов · ${p.records || 0} записей с обновлениями · ${p.duplicates || 0} повторных пакетов · ${p.rejected || 0} отклонено. В базе: ${p.own_orders} своих заявок, ${p.own_native_history} точек истории; без названия: ${p.unmapped_history}.`;
+  $('private-db').textContent = `База: ${p.db_path} · ${(p.db_bytes / 1048576).toFixed(2)} МБ`;
+  $('private-region').textContent = `Сервер сессии: ${(p.server || $('server').value).toUpperCase()}. Сервер игры: ${p.detected_server || 'не передаётся в HTTP AOD; проверьте в окне клиента'}`;
+  $('server').disabled = state.busy || p.enabled || p.process?.active;
+  $('private-error').textContent = p.last_error || '';
+  $('private-start').disabled = p.enabled || p.process?.active;
   $('private-last').textContent = `Последний пакет: ${date(p.last_received_at)}${p.last_topic ? ' · ' + p.last_topic : ''}`;
-  $('private-launcher').disabled = !p.enabled; $('private-start').disabled = p.enabled; $('private-stop').disabled = !p.enabled;
+  $('private-launcher').disabled = !p.enabled; $('private-start').disabled = p.enabled || p.process?.active; $('private-stop').disabled = !p.enabled && !p.process?.active;
   $('private-filter-text').textContent = p.enabled ? 'Приёмник включён. Свои цены появятся после получения сообщений от правильно запущенного Data Client. Открытие рынка в игре само по себе не подключает его.' : 'Приватный приёмник выключен. Настройка собственных наблюдений находится в разделе «Мои наблюдения».';
 }
 function setBusy(busy) {
   state.busy = busy;
   for (const input of document.querySelectorAll('#filters input, #filters select, #server, #select-all, #rows input[type=checkbox]')) input.disabled = busy;
   for (const button of document.querySelectorAll('.row-refresh')) button.disabled = busy || $('scope').value === 'private';
+  $('server').disabled = busy || state.privateEnabled;
   updateSelected();
 }
 async function trackJob(started) {
@@ -224,11 +231,16 @@ bind('prev', () => { state.offset = Math.max(0, state.offset - state.limit); ret
 bind('refresh', () => refresh()); bind('sources-refresh', () => { showView('market'); return refresh(); });
 bind('private-start', async () => {
   if (!$('private-ack').checked) throw new Error('Сначала прочитайте предупреждение и отметьте согласие на экспериментальный режим.');
-  await api('/api/private/start', {server: $('server').value, experimental_ack: true});
+  await api('/api/private/launch', {server: $('server').value, experimental_ack: true});
   $('scope').value = 'private'; state.offset = 0; await status(); await load();
-  notice('Приватный приёмник включён. Сам клиент ещё не запущен; скачайте файл запуска Windows. Сетевая приватность ещё не подтверждена.');
+  notice('Ожидайте запрос Windows. При первом запуске выберите установленный AOD 0.1.61. Затем откройте рынок в игре.');
 });
-bind('private-stop', async () => { await api('/api/private/stop', {}); $('private-ack').checked = false; await status(); notice('Приёмник остановлен. Файл запуска Windows должен остановить свой клиент при следующей проверке.'); });
+bind('private-stop', async () => { await api('/api/private/stop', {}); $('private-ack').checked = false; await status(); notice('Запрошена остановка своего AOD и приёмника. Чужие процессы не завершаются.'); });
+bind('setup-private', () => showView('private'));
+bind('app-stop', async () => { await api('/api/app/stop',{}); notice('Trade Desk остановлен. Можно закрыть эту вкладку.'); });
+bind('private-logs-refresh', async () => { const r=await api('/api/private/logs'); $('private-logs').textContent=r.lines.join('\n') || 'Журнал пока пуст'; });
+bind('private-orders-export', () => { location.href='/api/private/orders.xlsx?server='+encodeURIComponent($('server').value); });
+$('public-api-enabled').onchange=async () => { try { await api('/api/settings/public-api',{enabled:$('public-api-enabled').checked}); await status(); } catch(e) {showError(e);} };
 bind('private-launcher', () => { location.href = '/api/private/launcher'; });
 bind('nats-start', async () => { await api('/api/nats/start', {server: $('server').value}); await status(); });
 bind('nats-stop', async () => { await api('/api/nats/stop', {}); await status(); });

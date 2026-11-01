@@ -175,3 +175,8 @@ Live Asia REST/NATS и официальные правила SBI из текущ
 реальной ошибки политики Asia работают, ошибок JS и мобильного переполнения нет.
 Скриншоты: [график на явно синтетической тестовой истории](screenshots/quality-history-fixture.png),
 [таблица ткани с ручными исходными ценами и пятью повторами](screenshots/cloth-calculator.png).
+
+
+## Интеграция AOD, 1 ноября 2026
+
+См. [актуальную проверку](AOD_IMPLEMENTATION_VALIDATION.md): 82 unittest (80 passed, 2 Windows-only skips), Chromium и scoped wire test. Полный Windows-клиент и игра здесь не запускались.

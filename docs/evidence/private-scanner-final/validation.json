@@ -1,0 +1,20 @@
+{
+  "date_user_timezone": "2026-11-01 Asia/Vladivostok",
+  "unit_tests": {
+    "run": 82,
+    "passed": 80,
+    "skipped": 2,
+    "failed": 0,
+    "skips": "Windows PowerShell syntax, including generated supervisor; run in Windows CI"
+  },
+  "browser": "Chromium desktop/mobile, synthetic native HTTP, duplicate orders, export, logs, stop, no external browser requests",
+  "wire": "Pinned unchanged AOD dispatcher and plain HTTP uploader, synthetic data, loopback-only connect trace; other branches stubbed",
+  "package": "Wheel built and installed into isolated target; status entry point succeeded; resources included; user SQLite excluded",
+  "windows_exe_built": false,
+  "full_aod_executable_run": false,
+  "game_run": false,
+  "npcap_tested": false,
+  "windows_firewall_tested": false,
+  "privacy_certified": false,
+  "sbi_permission_confirmed": false
+}
