@@ -1,0 +1,34 @@
+﻿{
+    "windows":  "Microsoft Windows NT 10.0.26100.0",
+    "loopback_udp":  true,
+    "full_client_privacy_certified":  false,
+    "external_tcp_blocked":  true,
+    "wfp_events":  [
+                       {
+                           "protocol":  "17",
+                           "destination":  "198.51.100.1",
+                           "event_id":  5157
+                       },
+                       {
+                           "protocol":  "17",
+                           "destination":  "198.51.100.1",
+                           "event_id":  5152
+                       },
+                       {
+                           "protocol":  "6",
+                           "destination":  "198.51.100.1",
+                           "event_id":  5157
+                       },
+                       {
+                           "protocol":  "6",
+                           "destination":  "198.51.100.1",
+                           "event_id":  5152
+                       }
+                   ],
+    "external_udp_blocked":  true,
+    "loopback_tcp":  true,
+    "game_tested":  false,
+    "aod_tested":  false,
+    "tamper_detected":  true,
+    "tested_program":  "self-built synthetic probe"
+}
