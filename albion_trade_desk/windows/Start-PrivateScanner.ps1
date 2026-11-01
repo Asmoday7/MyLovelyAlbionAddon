@@ -1,6 +1,9 @@
 ﻿# Downloaded from the LOCAL Trade Desk UI after explicit experimental opt-in.
 # No changes to the game, no packet capture implementation, no personal ingest.
 $ErrorActionPreference = 'Stop'
+if (-not (Get-Command Assert-PrivateProtection -ErrorAction SilentlyContinue)) {
+    . (Join-Path $PSScriptRoot 'PrivateNetwork.ps1')
+}
 $destination = if ($managed) { $managed.destination } else { '@@DESTINATION@@' }
 $sessionId = if ($managed) { $managed.session_id } else { '@@SESSION_ID@@' }
 Add-Type -AssemblyName System.Windows.Forms
@@ -24,6 +27,7 @@ $sessionDir = $null
 $failure = $null
 $protectionActive = $false
 $npcapAvailable = $false
+$pausedTasks = @()
 function Write-Audit($kind, $detail) {
     if ($journal) {
         @{ at = [DateTime]::UtcNow.ToString('o'); kind = $kind; detail = $detail } |
@@ -46,7 +50,24 @@ function Other-Clients($ignorePid = 0) {
     })
 }
 try {
+    $sessionDir = if ($managed) { $managed.folder } else { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('AlbionTradeDesk\PrivateScanner\' + [guid]::NewGuid().ToString('N')) }
+    New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
+    $journal = Join-Path $sessionDir 'network-audit.jsonl'
     $script:client = if ($managed) { $managed.client_path } else { '' }
+    $expectedHash = if ($managed) { $managed.sha256 } else { '4feb2e2dd3c5e2e65f494581e3e5076b394a41bf777c936bc1bdfcc26fd1229c' }
+    if (-not $client -or -not (Test-Path -LiteralPath $client)) {
+        # The audited NSIS installer uses this exact registry key/default directory.
+        $install = Get-ItemProperty -LiteralPath 'HKLM:\Software\Albion Data Client' -ErrorAction SilentlyContinue
+        $candidates = @()
+        if ($install -and $install.'(default)') { $candidates += Join-Path $install.'(default)' 'albiondata-client.exe' }
+        $candidates += Join-Path $env:ProgramFiles 'Albion Data Client/albiondata-client.exe'
+        foreach ($candidate in $candidates) {
+            if ((Test-Path -LiteralPath $candidate) -and (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash -eq $expectedHash) {
+                $script:client = (Resolve-Path -LiteralPath $candidate).ProviderPath
+                break
+            }
+        }
+    }
     if (-not $client -or -not (Test-Path -LiteralPath $client)) {
     $picker = New-Object System.Windows.Forms.OpenFileDialog
     $picker.Title = 'Select the installed OFFICIAL albiondata-client.exe (not an installer)'
@@ -59,7 +80,6 @@ try {
     if (-not $npcapAvailable) {
         throw 'Npcap не найден. Установите Npcap с https://npcap.com/#download, затем повторите запуск сборщика.'
     }
-    $expectedHash = if ($managed) { $managed.sha256 } else { '4feb2e2dd3c5e2e65f494581e3e5076b394a41bf777c936bc1bdfcc26fd1229c' }
     $verified = (Get-FileHash -LiteralPath $client -Algorithm SHA256).Hash
     if ($verified -ne $expectedHash) { throw 'Файл не совпадает с проверенным AOD 0.1.61 x64. Выберите установленный exe официального релиза 0.1.61. Клиент не запущен.' }
     if ([IO.Path]::GetFileName($client) -notmatch '(?i)^albiondata-client.*\.exe$' -or $client -match '(?i)installer\.exe$') {
@@ -74,31 +94,34 @@ try {
         @($_.Actions | Where-Object { $_.Execute -match '(?i)albion.*data.*client' -or $_.Execute -eq $client }).Count -gt 0)
     })
     $startup = @(Get-CimInstance Win32_StartupCommand | Where-Object { $_.Command -match '(?i)albion.*data.*client' })
-    if ($tasks.Count -or $startup.Count) {
-        throw 'Ordinary Data Client autostart is enabled. Disable its task/startup entry in Windows first; the launcher will not silently modify it.'
+    $directTasks = @($tasks | Where-Object {
+        @($_.Actions).Count -eq 1 -and [Environment]::ExpandEnvironmentVariables([string]$_.Actions[0].Execute).Trim('"') -eq $client
+    })
+    if ($startup.Count -or $directTasks.Count -ne $tasks.Count) {
+        throw 'Found a custom Data Client autostart entry. Disable that entry in Windows before using the private collector; unrelated startup settings will not be modified.'
+    }
+    if ($directTasks.Count) {
+        $answer = [System.Windows.Forms.MessageBox]::Show(
+            'The official AOD installer enabled normal autostart. Pause its scheduled task during private collection? It will be restored after this client stops. A crash may leave it paused; see the local audit log.',
+            'Albion Trade Desk - AOD autostart', 'YesNo', 'Question')
+        if ($answer -ne 'Yes') { throw 'Private start cancelled; normal autostart was not changed.' }
+        foreach ($task in $directTasks) {
+            Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath | Out-Null
+            $pausedTasks += @{name=$task.TaskName;path=$task.TaskPath}
+        }
     }
     if (@(Get-NetFirewallProfile | Where-Object { -not $_.Enabled }).Count -gt 0) {
         throw 'Windows Firewall profiles must be enabled. No client was started.'
     }
-    $sessionDir = if ($managed) { $managed.folder } else { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('AlbionTradeDesk\PrivateScanner\' + [guid]::NewGuid().ToString('N')) }
-    New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
-    $journal = Join-Path $sessionDir 'network-audit.jsonl'
     $hash = (Get-FileHash -LiteralPath $client -Algorithm SHA256).Hash
+    Write-Audit 'autostart-paused' @{ tasks = $pausedTasks }
     Write-Audit 'preflight' @{ client = $client; sha256 = $hash; rules_permission = 'unconfirmed'; live_game_verified = $false }
     # The official client reads config from its current directory. Isolate it from
     # existing config files and explicitly disable its separate WebSocket server.
     [IO.File]::WriteAllText((Join-Path $sessionDir 'config.json'), '{"EnableWebsockets":false,"AllowedWebsocketHosts":[]}', (New-Object System.Text.UTF8Encoding($false)))
     $rule = 'AlbionTradeDesk-Private-' + [guid]::NewGuid().ToString('N')
-    $remote = @('0.0.0.0-126.255.255.255', '128.0.0.0-255.255.255.255', '::2-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
-    New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Outbound -Action Block -Enabled True -Profile Any -Program $client -Protocol Any -RemoteAddress $remote | Out-Null
-    $active = Get-NetFirewallRule -PolicyStore ActiveStore -Name $rule
-    if ($active.Enabled -ne 'True' -or $active.Action -ne 'Block') { throw 'Firewall rule is not active.' }
-    $application = Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $active
-    if ($application.Program -ne $client) { throw 'Firewall application filter does not match the selected client.' }
-    $address = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $active
-    foreach ($range in $remote) {
-        if ($address.RemoteAddress -notcontains $range) { throw 'Firewall address filter could not be verified.' }
-    }
+    $remote = @(Get-PrivateRemoteRanges)
+    New-PrivateProtection $rule $client
     $protectionActive = $true
     Write-Audit 'firewall-active' @{ rule = $rule; remote_ranges = $remote }
     $health = Invoke-RestMethod -Uri ($baseAddress + '/api/private/status') -TimeoutSec 3
@@ -108,6 +131,7 @@ try {
     $arguments = @('-i', $destination, '-p=')
     Write-Audit 'launch-policy' @{ destination = 'loopback-only'; personalized_ingest = 'empty'; websocket = $false; disable_upload = $false }
     if ($managed -and (Test-Path -LiteralPath (Join-Path $sessionDir 'stop'))) { throw 'Launch cancelled.' }
+    if ((Other-Clients).Count -gt 0) { throw 'Another AOD instance started during setup. No private client was launched.' }
     $child = Start-Process -FilePath $client -ArgumentList $arguments -WorkingDirectory $sessionDir -PassThru
     Write-Host 'Private client started. Keep this window open. Close it with Ctrl+C to stop the client.'
     Write-Host ('Local audit folder: ' + $sessionDir)
@@ -117,8 +141,7 @@ try {
     while (-not $child.HasExited) {
         if ($managed -and (Test-Path -LiteralPath (Join-Path $sessionDir 'stop'))) { break }
         if ((Other-Clients $child.Id).Count -gt 0) { throw 'Another Data Client was detected. Stopping this private client.' }
-        $currentRule = Get-NetFirewallRule -PolicyStore ActiveStore -Name $rule
-        if ($currentRule.Enabled -ne 'True' -or $currentRule.Action -ne 'Block') { throw 'Firewall protection was changed.' }
+        Assert-PrivateProtection $rule $client
         # WMI/NetTCPConnection only: never collect browser traffic or packet payloads.
         try { $connections = @(Get-NetTCPConnection -OwningProcess $child.Id -ErrorAction Stop) }
         catch {
@@ -156,6 +179,20 @@ try {
         catch { $safeToRemoveRule = $false }
         if (-not $child.HasExited) { $safeToRemoveRule = $false }
     }
+    # An upstream updater can replace the original process. Never remove protection
+    # while any process still uses the selected executable; do not kill foreign copies.
+    if ($rule -and $safeToRemoveRule) {
+        try {
+            $remaining = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $script:client })
+            if ($remaining.Count) {
+                $safeToRemoveRule = $false
+                $failure = 'AOD replacement or another process is still running. Protection remains active; no foreign process was stopped.'
+            }
+        } catch {
+            $safeToRemoveRule = $false
+            $failure = 'Cannot verify all AOD processes have exited. Protection remains active.'
+        }
+    }
     if ($rule -and $safeToRemoveRule) {
         try {
             Remove-NetFirewallRule -Name $rule -ErrorAction Stop
@@ -170,6 +207,14 @@ try {
         $failure = 'Остановка AOD не подтверждена. Защитное правило сохранено; проверьте журнал.'
         Write-Audit 'cleanup' @{ firewall_rule_retained = $rule; reason = 'client exit not confirmed' }
         Write-Warning ('Protection rule was retained because client exit is unknown: ' + $rule)
+    }
+    if ($safeToRemoveRule) {
+        foreach ($task in $pausedTasks) {
+            try { Enable-ScheduledTask -TaskName $task.name -TaskPath $task.path | Out-Null }
+            catch { $failure = 'AOD stopped, but autostart restoration failed. See the local audit log.'; Write-Audit 'autostart-restore-error' @{message=$_.Exception.Message;task=$task} }
+        }
+    } elseif ($pausedTasks.Count) {
+        Write-Audit 'autostart-retained-disabled' @{tasks=$pausedTasks;reason='client exit not confirmed'}
     }
     Set-ManagedState $(if ($failure) { 'error' } else { 'disabled' }) $failure
     $mutex.ReleaseMutex()

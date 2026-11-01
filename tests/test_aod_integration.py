@@ -203,3 +203,31 @@ class ManagedWindowsSyntaxTests(unittest.TestCase):
                 command="$t=$null;$e=$null;[System.Management.Automation.Language.Parser]::ParseFile($env:ATD_PARSE_FILE,[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|Out-String|Write-Error;exit 1}"
                 result=subprocess.run(['powershell.exe','-NoProfile','-Command',command],env={**os.environ,'ATD_PARSE_FILE':str(path)},capture_output=True,text=True)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+
+@unittest.skipUnless(os.name == 'nt', 'Native Windows preflight requires Windows')
+class NativeWindowsPreflightTests(unittest.TestCase):
+    def test_rejects_unverified_executable_before_launch(self):
+        import ctypes
+        import sys
+        from albion_trade_desk.aod_process import encoded_command
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            self.skipTest('Preflight test needs an elevated isolated Windows runner, never prompts for UAC')
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory)
+            managed={'destination':'http://127.0.0.1:1234/private/east/synthetic','session_id':'fixture',
+                     'folder':str(folder),'client_path':sys.executable,'sha256':'0'*64}
+            windows=Path(__file__).resolve().parents[1]/'albion_trade_desk/windows'
+            preamble='$managed = '+"@'\n"+json.dumps(managed)+"\n'@ | ConvertFrom-Json\n"
+            script=preamble+(windows/'PrivateNetwork.ps1').read_text(encoding='utf-8-sig')+'\n'+(windows/'Start-PrivateScanner.ps1').read_text(encoding='utf-8-sig')
+            source=folder/'guard-source.ps1'
+            source.write_text(script,encoding='utf-8-sig')
+            import base64
+            path64=base64.b64encode(str(source).encode('utf-8')).decode('ascii')
+            loader="& ([ScriptBlock]::Create([IO.File]::ReadAllText([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"+path64+"')))))"
+            result=subprocess.run(['powershell.exe','-NoProfile','-STA','-NonInteractive','-EncodedCommand',encoded_command(loader)],capture_output=True,text=True,timeout=30)
+            state=json.loads((folder/'state.json').read_text(encoding='utf-8-sig'))
+            self.assertEqual(state['state'],'error',result.stdout+result.stderr)
+            self.assertIsNone(state['pid'])
+            self.assertFalse(state['firewall_active'])
+            self.assertTrue('Npcap' in state['error'] or '0.1.61' in state['error'])

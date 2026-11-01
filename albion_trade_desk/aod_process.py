@@ -41,7 +41,8 @@ class AodProcess:
             path64 = base64.b64encode(str(config_path.resolve()).encode('utf-8')).decode('ascii')
             preamble = "$managed = Get-Content -Raw -LiteralPath ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + path64 + "'))) | ConvertFrom-Json\n"
             script = Path(__file__).with_name('windows').joinpath('Start-PrivateScanner.ps1').read_text(encoding='utf-8-sig')
-            payload = encoded_command(preamble + script)
+            policy = Path(__file__).with_name('windows').joinpath('PrivateNetwork.ps1').read_text(encoding='utf-8-sig')
+            payload = encoded_command(preamble + policy + '\n' + script)
             command_file = self.folder / 'guardian.command'
             command_file.write_text(payload, encoding='ascii')
             file64 = base64.b64encode(str(command_file.resolve()).encode('utf-8')).decode('ascii')

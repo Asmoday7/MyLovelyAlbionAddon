@@ -99,7 +99,8 @@ class PrivateScanner:
     def launcher(self):
         # Fixed template and server-generated path only; never interpolate user filesystem text.
         script = (Path(__file__).with_name("windows") / "Start-PrivateScanner.ps1").read_text(encoding="utf-8-sig")
-        return script.replace("@@DESTINATION@@", self.destination()).replace("@@SESSION_ID@@", self.session).encode("utf-8-sig")
+        policy = (Path(__file__).with_name("windows") / "PrivateNetwork.ps1").read_text(encoding="utf-8-sig")
+        return (policy + "\n" + script.replace("@@DESTINATION@@", self.destination()).replace("@@SESSION_ID@@", self.session)).encode("utf-8-sig")
 
     def receive(self, server, token, topic, payload, observed_at=None):
         with self.lock:

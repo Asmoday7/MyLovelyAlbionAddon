@@ -1,8 +1,15 @@
 name: Windows application
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches-ignore: ['builds/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   windows-x64:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -10,17 +17,53 @@ jobs:
           python-version: '3.12'
           architecture: x64
       - name: Native Windows tests including SQLite cleanup and PowerShell syntax
-        run: python -m unittest discover -s tests -v
-      - run: python -m pip install pyinstaller==6.16.0
-      - run: python -m PyInstaller --noconfirm AlbionTradeDesk.spec
-      - name: Frozen application smoke
+        id: tests
         shell: pwsh
         run: |
-          $folder = Join-Path $env:RUNNER_TEMP 'trade-desk-build-check'
-          & .\dist\AlbionTradeDesk.exe status --data-dir $folder
+          python -m unittest discover -s tests -v 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/unittest.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows tests failed' }
+      - run: python -m pip install pyinstaller==6.16.0
+      - name: Build executable
+        id: package
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm AlbionTradeDesk.spec 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/build.log"
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+      - name: Packaged application HTTP, SQLite, export and cleanup
+        id: frozen
+        shell: pwsh
+        run: |
+          python scripts/check_frozen_app.py dist/AlbionTradeDesk.exe --report "$env:RUNNER_TEMP/frozen.json"
           if ($LASTEXITCODE -ne 0) { throw 'Frozen application failed' }
-          Remove-Item -Recurse -Force $folder
+      - name: Real Windows Firewall and WFP, synthetic process only
+        id: firewall
+        shell: powershell
+        run: .\scripts\Test-PrivateNetwork.ps1 -Report "$env:RUNNER_TEMP/firewall.json"
+      - name: Gather build report and logs
+        if: always()
+        shell: pwsh
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          BUILD_OUTCOME: ${{ steps.package.outcome }}
+          FROZEN_OUTCOME: ${{ steps.frozen.outcome }}
+          FIREWALL_OUTCOME: ${{ steps.firewall.outcome }}
+        run: |
+          $out=Join-Path $env:RUNNER_TEMP 'atd-build-output'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          foreach($name in @('unittest.log','build.log','frozen.json','firewall.json')) {
+            $p=Join-Path $env:RUNNER_TEMP $name
+            if(Test-Path $p){Copy-Item $p $out}
+          }
+          $exe=Join-Path $env:GITHUB_WORKSPACE 'dist/AlbionTradeDesk.exe'
+          $sha=$null
+          if(Test-Path $exe){Copy-Item $exe $out;$sha=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()}
+          @{source_commit=$env:GITHUB_SHA;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;
+            windows=[Environment]::OSVersion.VersionString;tests=$env:TEST_OUTCOME;build=$env:BUILD_OUTCOME;
+            frozen=$env:FROZEN_OUTCOME;firewall=$env:FIREWALL_OUTCOME;exe_sha256=$sha;
+            game_tested=$false;npcap_tested=$false;full_client_privacy_certified=$false} |
+            ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $out 'build-report.json')
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: AlbionTradeDesk-Windows-x64
-          path: dist/AlbionTradeDesk.exe
+          path: ${{ runner.temp }}/atd-build-output/
