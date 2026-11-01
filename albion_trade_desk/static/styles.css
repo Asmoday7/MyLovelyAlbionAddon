@@ -489,6 +489,50 @@ td { font-weight: 550; }
 #batch-feedback:empty, #batch-context:empty { display: none; }
 .batch-loadout-result { background: #fff3e5; border: 1px solid #d7ae91; border-radius: 12px; padding: 20px; margin-top: 16px; }
 #batch-loadout-code { display: block; width: 100%; min-height: 100px; margin: 12px 0; font: 13px/1.5 monospace; overflow-wrap: anywhere; }
+.craft-ideas { margin-bottom: 24px; }
+.ideas-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+.ideas-heading h2 { margin: 8px 0; font-size: 25px; }
+.ideas-controls { display: grid; grid-template-columns: repeat(auto-fit,minmax(145px,1fr)); gap: 13px; margin-top: 20px; }
+.ideas-controls label,.ideas-result-tools label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
+.ideas-controls select,.ideas-controls input { width: 100%; min-width: 0; }
+.ideas-result-tools { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; padding: 18px 0; }
+.ideas-result-tools input { width: 105px; }
+.ideas-assumptions { font-size: 13px; color: var(--muted); margin: 10px 0; }
+.ideas-options>summary,#craft-manual>summary { cursor: pointer; padding: 12px 0; font-weight: 650; }
+#craft-manual { margin: 16px 0; }
+.ideas-options { border-bottom: 1px solid var(--line); }
+.ideas-counts { display: flex; gap: 9px; flex-wrap: wrap; }
+.ideas-counts>span { font-size: 12px; padding: 7px 10px; border-radius: 20px; background: #fff1e4; }
+.ideas-results { display: grid; gap: 14px; margin-top: 18px; }
+.craft-opportunity { display: grid; grid-template-columns: minmax(240px,1fr) minmax(0,1.45fr); gap: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: #fffefa; min-width: 0; }
+.opportunity-info { min-width: 0; }
+.opportunity-info h3 { margin: 0 0 5px; font-size: 19px; overflow-wrap: anywhere; }
+.opportunity-info>small { display: block; color: var(--muted); font-size: 12px; margin: 5px 0; }
+.idea-status { display: inline-block; padding: 5px 9px; border-radius: 8px; font-size: 12px; margin-top: 10px; background: #f4eee8; }
+.idea-status.positive { background: #e9f1e5; color: #45663f; }
+.idea-status.negative { background: #fae8ea; color: #a13e4e; }
+.opportunity-stats { display: flex; gap: 15px; flex-wrap: wrap; margin: 14px 0; }
+.opportunity-stats>div { flex: 1 1 95px; }
+.opportunity-stats small { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+.opportunity-stats strong { display: block; font-size: 17px; overflow-wrap: anywhere; }
+.opportunity-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.opportunity-actions input { width: 80px; }
+.opportunity-actions>small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.craft-frame-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 7px; align-items: stretch; min-width: 0; }
+.craft-frame { border: 1px solid #d6cec6; border-radius: 10px; padding: 11px 8px; min-width: 0; display: flex; flex-direction: column; gap: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.craft-frame.q2 { border-color: #baa08b; }.craft-frame.q3 { border-color: #9db1c4; }.craft-frame.q4 { border-color: #d6ac54; }
+.craft-frame.masterpiece { border-color: #b78bc5; background: #f7eff9; }
+.craft-frame>strong { font-size: 11px; }.craft-frame .frame-price { font-weight: 700; font-size: 14px; }
+.craft-frame small { font-size: 11px; color: var(--muted); margin-top: auto; }
+.gain { color: #496d41; }.loss { color: #a13d4e; }
+.ideas-pagination { display: flex; justify-content: end; align-items: center; gap: 12px; margin-top: 18px; }
+.ideas-footnote { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 0; }
+#ideas-feedback:empty { display: none; }
+#batch-line-settings>details { padding: 10px 0; border-top: 1px solid var(--line); }
+#batch-line-settings>details>summary { cursor: pointer; }
+#batch-cash { font-size: 12px; }
+@media(max-width:1100px){ .craft-opportunity { grid-template-columns: 1fr; }.craft-frame { gap: 7px; } }
+@media(max-width:600px){ .ideas-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }.craft-opportunity { padding: 14px; }.craft-frame-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }.ideas-result-tools>label { flex: 1 1 130px; }.ideas-result-tools select { max-width: 100%; }.ideas-heading h2 { font-size: 21px; }.craft-ideas { padding: 16px; } }
 @media(max-width:650px) {
   .batch-workspace .craft-save-actions { width: 100%; }
   #batch-name { flex: 1; min-width: 130px; }

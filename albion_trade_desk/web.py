@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler
 from .server_socket import LoopbackHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from . import __version__, analytics, ingestion, crafting, craft_batch, history_view, refining
+from . import __version__, analytics, ingestion, crafting, craft_batch, craft_ideas, history_view, refining
 from .domain import SERVERS, MARKETS, quality, region, location, utcnow
 from .export import csv_bytes, xlsx_bytes
 from .transport import HttpClient, sync_catalog, refresh_market
@@ -28,7 +28,7 @@ class Jobs:
         self.lock = threading.Lock()
         self.entries = {}
 
-    def submit(self, function, kind="market"):
+    def submit(self, function, kind="market", with_progress=False):
         with self.lock:
             if any(j["status"] in ("queued", "running") for j in self.entries.values()):
                 raise ValueError("Обновление уже идёт. Дождитесь его завершения")
@@ -42,7 +42,9 @@ class Jobs:
             with self.lock:
                 self.entries[uid]["status"] = "running"
             try:
-                result = function()
+                def progress(value):
+                    with self.lock:self.entries[uid]['progress']=value
+                result = function(progress) if with_progress else function()
                 with self.lock:
                     self.entries[uid].update(status="done", result=result)
                 if kind == "catalog":
@@ -153,6 +155,8 @@ def make_server(store, port=8765):
                     self.respond(history_view.series(store,query))
                 elif path == "/api/craft/search":
                     self.respond(crafting.search(store,query.get('search','')))
+                elif path == '/api/craft/ideas/revision':
+                    self.respond(craft_ideas.revision(store))
                 elif path == "/api/craft/packs":
                     self.respond(crafting.saved(store))
                 elif path == "/api/craft/pack":
@@ -188,7 +192,7 @@ def make_server(store, port=8765):
                             source.backup(target)
                         self.respond(p.read_bytes(), content_type="application/vnd.sqlite3", filename="trade-desk-backup.sqlite3")
                 else:
-                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/craft_batch.js":"craft_batch.js", "/market_view.js":"market_view.js", "/quality.js":"quality.js", "/cloth.js":"cloth.js", "/styles.css": "styles.css"}.get(path)
+                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/craft_batch.js":"craft_batch.js", "/craft_ideas.js":"craft_ideas.js", "/craft_summary.js":"craft_summary.js", "/market_view.js":"market_view.js", "/quality.js":"quality.js", "/cloth.js":"cloth.js", "/styles.css": "styles.css"}.get(path)
                     if name:
                         self.respond((STATIC / name).read_bytes(), content_type=(mimetypes.guess_type(name)[0] or "text/plain") + "; charset=utf-8")
                     else:
@@ -223,6 +227,11 @@ def make_server(store, port=8765):
                     self.respond(jobs.submit(lambda: history_view.refresh(client,body),"history"),202)
                 elif path == "/api/craft/plan":
                     self.respond(crafting.plan(store,body))
+                elif path == '/api/craft/ideas':
+                    self.respond(craft_ideas.analyze(store,body))
+                elif path == '/api/craft/ideas/refresh':
+                    craft_ideas.config(body)
+                    self.respond(jobs.submit(lambda progress:craft_ideas.refresh(client,body,progress),'craft-ideas',with_progress=True),202)
                 elif path == '/api/craft/batch/plan':
                     self.respond(craft_batch.plan(store,body))
                 elif path == '/api/craft/batch/crystal':

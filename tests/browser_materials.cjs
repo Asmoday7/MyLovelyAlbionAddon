@@ -34,7 +34,7 @@ const base=process.env.ALBION_SMOKE_URL;
   const stored=await (await page.request.get(base+'/api/private/orders?server=east')).json();
   assert.equal(stored.rows.length,2);
   assert.ok(stored.rows.every(r=>r.location==='1002'&&r.raw_location==='1000'&&r.market_type==='city'&&r.quality===1&&r.enchantment===3));
-  assert.equal(await page.locator('#app-version').textContent(),'Версия 0.2.0');
+  assert.equal(await page.locator('#app-version').textContent(),'Версия 0.3.0');
   if(process.env.ALBION_ARTIFACT_DIR)await page.screenshot({path:process.env.ALBION_ARTIFACT_DIR+'/materials-live.png'});
   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
   console.log('PASS: material rescan across city/market, prices and weekly history update inside open dialog, normal quality independent of .3 enchantment, original location retained, version displayed. Synthetic fixtures only.');

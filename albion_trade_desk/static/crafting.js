@@ -1,5 +1,6 @@
 import {qualityGrid,qualityNames} from './quality.js';
 import {createCraftBatch} from './craft_batch.js';
+import {createCraftIdeas} from './craft_ideas.js';
 // The server owns recipes, quantities, provenance and cost calculations.
 export function createCrafting({api, fmt, date, el, notice, showError, job, showView, catalog, initialCity, initialScope, maxAge}) {
   const $ = id => document.getElementById(id);
@@ -137,7 +138,8 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     $('server').value=c.server;$('craft-city').value=c.city;$('craft-sale-city').value=c.sale_city;
     $('craft-scope').value=c.scope;$('craft-age').value=c.max_age_hours;
     $('craft-units').value=c.units;$('craft-quality').value=c.output_quality;
-    await search(c.item_id,true,c.item_id);
+    s.manualLoading=true;$('craft-manual').open=true;$('craft-preview').open=true;
+    try{await search(c.item_id,true,c.item_id);}finally{s.manualLoading=false;}
     $('craft-recipe').value=String(c.variant);
     await refreshPlan(true);await listPacks();
     await batch.contextChanged();
@@ -155,8 +157,9 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
         $('craft-sale-city').add(new Option(name,id));
       }
     }
+    batch.updateContext(data);ideas.updateContext(data);
   }
-  async function open() {
+  async function open(loadIdeas=true) {
     if (!catalog()) return;
     if (!s.initialized) {
       $('craft-city').value=initialCity()==='3003'?'1002':initialCity();
@@ -165,15 +168,15 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     }
     await listPacks();
     await batch.open();
-    if (!s.family) {$('craft-search').value='Forgebark';await search('Forgebark',true);}
-    else await refreshPlan(true);
+    if(s.family)await refreshPlan(true);
+    if(loadIdeas)await ideas.open();
   }
   async function openItem(uid,outputQuality=1) {
-    await open();s.id=null;
+    await open(false);s.id=null;s.manualLoading=true;$('craft-manual').open=true;
     $('craft-city').value=initialCity()==='3003'?'1002':initialCity();$('craft-sale-city').value=initialCity();
     $('craft-scope').value=initialScope();$('craft-quality').value=String(['auto','all'].includes(String(outputQuality))?'auto':outputQuality);
-    $('craft-search').value=uid;await search(uid,true,uid);
-    await batch.contextChanged();
+    try{$('craft-search').value=uid;await search(uid,true,uid);await batch.contextChanged();$('craft-preview').open=true;}
+    finally{s.manualLoading=false;}
   }
   const batch=createCraftBatch({api,el,fmt,notice,showError,job,copy,context:()=>{
     const c=cfg();return Object.fromEntries(['server','city','sale_city','scope','max_age_hours'].map(k=>[k,c[k]]));
@@ -181,6 +184,15 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     $('server').value=c.server;$('craft-city').value=c.city;$('craft-sale-city').value=c.sale_city;
     $('craft-scope').value=c.scope;$('craft-age').value=c.max_age_hours;
   }});
+  const ideas=createCraftIdeas({api,el,fmt,showError,job,context:()=>{
+    const c=cfg();return Object.fromEntries(['server','city','sale_city','scope','max_age_hours'].map(k=>[k,c[k]]));
+  },applyContext:async c=>{
+    $('server').value=c.server;$('craft-city').value=c.city;$('craft-sale-city').value=c.sale_city;$('craft-scope').value=c.scope;$('craft-age').value=c.max_age_hours;
+    await batch.contextChanged();await refreshPlan(true);
+  },addSelection:selection=>batch.addSelection(selection),getReturn:()=>batch.getReturn(),setReturn:rate=>batch.setReturn(rate)});
+  $('craft-manual').addEventListener('toggle',async()=>{
+    if($('craft-manual').open&&!s.family&&!s.manualLoading){s.manualLoading=true;try{$('craft-search').value='Forgebark';await search('Forgebark',true);}catch(e){showError(e);}finally{s.manualLoading=false;}}
+  });
   on('batch-add',()=>batch.add(s.plan));
   let debounce;
   $('craft-search').addEventListener('input',()=>{clearTimeout(debounce);debounce=setTimeout(()=>search($('craft-search').value).catch(showError),220);});
@@ -206,8 +218,8 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
   setInterval(async()=>{
     if (document.hidden||$('craft-view').hidden||s.polling) return;
     s.polling=true;
-    try {await refreshPlan();await batch.refresh();} catch(e) {if(s.lastError!==e.message){s.lastError=e.message;showError(e);}}
+    try {await refreshPlan();await batch.refresh();await ideas.poll();} catch(e) {if(s.lastError!==e.message){s.lastError=e.message;showError(e);}}
     finally {s.polling=false;}
   },3000);
-  return {open,openItem,updateContext,refresh:async()=>{await refreshPlan(true);await batch.refresh(true);}};
+  return {open,openItem,updateContext,refresh:async()=>{await refreshPlan(true);await batch.refresh(true);await ideas.poll(true);}};
 }

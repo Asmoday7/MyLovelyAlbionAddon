@@ -31,10 +31,13 @@ const inputs = ['T4_PLANKS', 'T4_CLOTH', 'T4_ARTEFACT_MAIN_NATURESTAFF_CRYSTAL']
     assert.ok(await page.locator('#enchantment').isVisible());
     assert.ok(await page.locator('#scope').isVisible());
     await page.locator('[data-view="craft"]').click();
+    await page.locator('#craft-manual>summary').click();
+    await page.locator('#craft-preview>summary').click();
     await page.waitForSelector('#craft-resources .craft-resource');
     assert.match(await page.locator('#craft-item-title').textContent(), /Кузнечный посох.*4\.0/);
     assert.deepEqual(await quantities(), ['16', '8', '1']);
     assert.match(await page.locator('#craft-resources').textContent(), /Pine Planks/);
+    await page.locator('#craft-selector>summary').click();
     await page.locator('#craft-search').fill('forge bark');
     await page.waitForResponse(r => r.url().includes('/api/craft/search?search=forge+bark'));
     assert.equal(await page.locator('#craft-search-results button').count(), 1);
@@ -69,8 +72,10 @@ const inputs = ['T4_PLANKS', 'T4_CLOTH', 'T4_ARTEFACT_MAIN_NATURESTAFF_CRYSTAL']
     await page.locator('#layout-table').click();
     await page.waitForSelector('#rows tr');
     await page.locator('[data-view="craft"]').click();
+    await page.locator('#craft-saved-panel>summary').click();
     await page.locator('#craft-saved-list button').click();
     await page.waitForFunction(() => document.querySelector('#craft-units').value === '10');
+    await page.waitForSelector('#craft-saved-list button.active');
     assert.equal(await page.locator('#craft-scope').inputValue(), 'private');
     assert.equal(await page.locator('#craft-city').inputValue(), '1002');
     assert.equal(await page.locator('#craft-sale-city').inputValue(), '3003');

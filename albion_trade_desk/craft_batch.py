@@ -10,6 +10,68 @@ from . import crafting, history_view, ingestion
 from .domain import number, utcnow
 
 
+def output_qualities(uid):
+    """Known commodities have no equipment quality distribution."""
+    return (1,) if re.match(r'^T\d+_(?:MEAL_|POTION_|PLANKS(?:_|$)|CLOTH(?:_|$)|METALBAR(?:_|$)|LEATHER(?:_|$)|STONEBLOCK(?:_|$))',uid) else (1,2,3,4,5)
+
+
+def liquidity_stats(history, produced, cfg):
+    known=history['known_quantity']
+    cap=int((dec(known)*dec(cfg['liquidity_share_pct'])/100).to_integral_value(rounding=ROUND_FLOOR)) if known is not None else None
+    return {'known_sales':known,'complete':history.get('volume') is not None,
+        'known_hours':history['known_hours'],'expected_hours':168,'point_count':history.get('point_count'),
+        'recommended_units':cap,'above_recommendation':cap is not None and produced>cap,
+        'estimated_days':value(produced*7/dec(known)) if known and history.get('volume') is not None else None}
+
+
+def frame_overview(frames):
+    regular=[q for q in frames if q['quality']<5 and q['applicable']]
+    priced=[q for q in regular if q['price'] is not None]
+    known=[q['liquidity']['known_sales'] for q in regular if q['liquidity']['known_sales'] is not None]
+    result={'price_min':min((q['price'] for q in priced),default=None),
+        'price_max':max((q['price'] for q in priced),default=None),
+        'priced_qualities':len(priced),'applicable_qualities':len(regular),
+        'ordinary_price_known':any(q['quality']==1 for q in priced),
+        'known_sales':sum(known) if known else None,
+        'sales_complete':all(q['liquidity']['complete'] for q in regular),
+        'sales_qualities_known':len(known),'models':{}}
+    for model in ('no_focus','focus'):
+        profits=[q['models'][model]['profit'] for q in regular if q['models'][model]['profit'] is not None]
+        units=[q['models'][model]['unit_profit'] for q in regular if q['models'][model]['unit_profit'] is not None]
+        low=min(units,default=None)
+        result['models'][model]={'profit_min':min(profits,default=None),'profit_max':max(profits,default=None),
+            'unit_profit_min':low,'unit_profit_max':max(units,default=None),
+            'rank_profit':low if result['ordinary_price_known'] else None}
+    return result
+
+
+def quality_frames(store, db, cfg, line, produced, costs, refundable_cost, missing, purchase_fee, fixed, now):
+    frames=[]
+    kind='buy_price_max' if cfg['sale_city']=='3003' or cfg['sell_mode']=='instant' else 'sell_price_min'
+    fees=(dec(cfg['sales_tax_pct'])+(dec(cfg['setup_fee_pct']) if kind=='sell_price_min' else 0))/100
+    applicable=output_qualities(line['item_id'])
+    for q in range(1,6):
+        quote=crafting.quote(db,cfg,line['item_id'],cfg['sale_city'],q,kind,now) if q in applicable else None
+        manual=line['sale_price'] if q==line['output_quality'] else None
+        price=manual if manual is not None else quote['price'] if quote and quote['fresh'] else None
+        revenue=produced*dec(price)*(1-fees) if price is not None else None
+        cash=revenue-costs-purchase_fee-fixed if revenue is not None and not missing else None
+        models={}
+        for model in ('no_focus','focus'):
+            rate=line[model+'_return'] if line[model+'_return'] is not None else cfg[model+'_return']
+            returned=refundable_cost*dec(rate)/100 if rate is not None and not missing else None
+            profit=cash+returned if cash is not None and returned is not None else None
+            models[model]={'profit':value(profit),'unit_profit':value(profit/produced) if profit is not None else None}
+        if q in applicable:
+            history=history_view.series(store,{'id':line['item_id'],'server':cfg['server'],'city':cfg['sale_city'],
+                'quality':q,'scope':cfg['scope'],'hours':168},now)
+            liquidity=liquidity_stats(history,produced,cfg)
+        else:
+            liquidity={'known_sales':None,'complete':False,'known_hours':0,'point_count':None,'recommended_units':None}
+        frames.append({'quality':q,'applicable':q in applicable,'price':price,'quote':quote,'models':models,'liquidity':liquidity})
+    return frames
+
+
 def optional(value, maximum=1e12):
     return None if value in (None, '') else number(value, 0, maximum)
 
@@ -19,6 +81,8 @@ def config(body):
     if not isinstance(lines, list) or not 1 <= len(lines) <= 100:
         raise ValueError('Добавьте от 1 до 100 рецептов в партию')
     buy, sell = body.get('buy_mode', 'instant'), body.get('sell_mode', 'order')
+    all_qualities=body.get('all_qualities',False)
+    if type(all_qualities) is not bool: raise ValueError('all_qualities должен быть boolean')
     if buy not in ('instant', 'order') or sell not in ('instant', 'order'):
         raise ValueError('Неизвестный способ закупки или продажи')
     cfg = {k: body[k] for k in ('server','city','sale_city','scope','max_age_hours') if k in body}
@@ -49,7 +113,7 @@ def config(body):
             raise ValueError('Некорректная строка материала')
         materials[key] = {'bought': number(value.get('bought',0),0,1e12), 'price': optional(value.get('price'))}
     return {**{k: context[k] for k in ('server','city','sale_city','scope','max_age_hours')},
-        'lines': result, 'materials': materials, 'buy_mode': buy, 'sell_mode': sell,
+        'lines': result, 'materials': materials, 'buy_mode': buy, 'sell_mode': sell,'all_qualities':all_qualities,
         'sales_tax_pct': number(body.get('sales_tax_pct',8),0,100),
         'setup_fee_pct': number(body.get('setup_fee_pct',2.5),0,100),
         'no_focus_return': optional(body.get('no_focus_return'),99.9),
@@ -124,13 +188,7 @@ def plan(store, body, now=None):
         delta = dec(models['focus']['profit'])-dec(models['no_focus']['profit']) if all(models[n]['profit'] is not None for n in models) else None
         history = history_view.series(store, {'id':line['item_id'],'server':cfg['server'],'city':cfg['sale_city'],
             'quality':line['output_quality'],'scope':cfg['scope'],'hours':168},now)
-        known = history['known_quantity']
-        cap = int((dec(known)*dec(cfg['liquidity_share_pct'])/100).to_integral_value(rounding=ROUND_FLOOR)) if known is not None else None
-        liquidity = {'known_sales':known, 'complete':history.get('volume') is not None,
-            'known_hours':history['known_hours'],'expected_hours':168,
-            'point_count':history.get('point_count'), 'recommended_units':cap,
-            'above_recommendation':cap is not None and produced>cap,
-            'estimated_days':value(produced*7/dec(known)) if known and history.get('volume') is not None else None}
+        liquidity=liquidity_stats(history,produced,cfg)
         line_rows.append({'config':line, 'item':recipe['item'], 'operations':recipe['operations'],
             'produced':recipe['produced'],'overproduction':recipe['overproduction'],
             'gross_materials_cost':value(costs) if not missing else None,'known_materials_cost':value(costs),
@@ -140,6 +198,11 @@ def plan(store, body, now=None):
             'base_focus_per_operation':recipe['base_focus_per_operation'],
             'silver_per_focus':value(delta/focus) if delta is not None and focus else None,
             'missing_prices':missing+int(sale_price is None),'liquidity':liquidity})
+        if cfg['all_qualities']:
+            with store.connect() as db:
+                frames=quality_frames(store,db,cfg,line,produced,costs,return_value,missing,purchase_fee,fixed,now)
+            line_rows[-1]['quality_summary']=frames
+            line_rows[-1]['overview']=frame_overview(frames)
         if net_revenue is not None: totals['net_revenue'] += net_revenue
         if complete: totals['cash_profit'] += cash_profit
         if not complete: totals['incomplete_lines'] += 1
@@ -165,6 +228,12 @@ def plan(store, body, now=None):
         'no_focus_profit':value(totals['no_focus']),'focus_profit':value(totals['focus']),
         'focus':value(totals['focus_spent']) if not totals['unknown_focus'] else None,
         'transport':cfg['transport']}
+    if cfg['all_qualities']:
+        for model in ('no_focus','focus'):
+            lows=[r['overview']['models'][model]['profit_min'] for r in line_rows]
+            highs=[r['overview']['models'][model]['profit_max'] for r in line_rows]
+            summary[model+'_range']={'min':value(sum(map(dec,lows))-dec(cfg['transport'])) if all(p is not None for p in lows) else None,
+                'max':value(sum(map(dec,highs))-dec(cfg['transport'])) if all(p is not None for p in highs) else None}
     return {'config':cfg,'lines':line_rows,'resources':rows,'summary':summary,
         'basis':'gross shopping; expected returns remain inventory; selected output quality is an assumption; observed history is not guaranteed demand'}
 
@@ -252,23 +321,35 @@ def load(store, uid):
     return {'id':row['id'],'name':row['name'],**plan(store,json.loads(row['config']))}
 
 
-def refresh(client, body):
+def refresh_computed(client, computed_batches, progress=None):
     from .transport import batches
-    computed = plan(client.store,body)
-    cfg = computed['config']; total = {'prices':0,'history':0}
-    groups = defaultdict(set)
-    for r in computed['resources']: groups[(cfg['city'],1)].add(r['id'])
-    for line in cfg['lines']: groups[(cfg['sale_city'],line['output_quality'])].add(line['item_id'])
+    cfg=computed_batches[0]['config'];total={'prices':0,'history':0}
+    groups=defaultdict(set);history_groups=defaultdict(set)
+    for computed in computed_batches:
+        for r in computed['resources']: groups[(cfg['city'],1)].add(r['id'])
+        for line in computed['config']['lines']:
+            qs=output_qualities(line['item_id']) if computed['config']['all_qualities'] else (line['output_quality'],)
+            for q in qs:
+                groups[(cfg['sale_city'],q)].add(line['item_id'])
+                history_groups[q].add(line['item_id'])
+    tasks=[]
     for (city,q),ids in groups.items():
         for url in batches(cfg['server'],'prices',sorted(ids),[city],[q]):
-            total['prices'] += ingestion.prices(client.store,client.get(url),cfg['server'])
-    groups = defaultdict(set)
-    for line in cfg['lines']: groups[line['output_quality']].add(line['item_id'])
+            tasks.append(('prices',url,0))
     end = int(utcnow()//3600)*3600
     date = lambda t: datetime.fromtimestamp(t,timezone.utc).strftime('%Y-%m-%d')
-    for q,ids in groups.items():
+    for q,ids in history_groups.items():
         for scale in (1,6):
             for url in batches(cfg['server'],'history',sorted(ids),[cfg['sale_city']],[q],
                 {'time-scale':scale,'date':date(end-7*86400),'end_date':date(end+86400)}):
-                total['history'] += ingestion.history(client.store,client.get(url,ttl=3600),cfg['server'],seconds=scale*3600)
+                tasks.append(('history',url,scale*3600))
+    for index,(kind,url,seconds) in enumerate(tasks):
+        if progress:progress({'done':index,'total':len(tasks),'label':'Получаем цены' if kind=='prices' else 'Получаем продажи по всем рамкам'})
+        payload=client.get(url,ttl=3600 if kind=='history' else 900)
+        total[kind] += ingestion.history(client.store,payload,cfg['server'],seconds=seconds) if kind=='history' else ingestion.prices(client.store,payload,cfg['server'])
+    if progress:progress({'done':len(tasks),'total':len(tasks),'label':'Данные загружены'})
     return total
+
+
+def refresh(client, body, progress=None):
+    return refresh_computed(client,[plan(client.store,body)],progress)

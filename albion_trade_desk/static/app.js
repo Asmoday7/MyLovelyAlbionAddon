@@ -183,7 +183,10 @@ async function trackJob(started) {
   notice(catalog ? 'Загрузка списка началась. Дождитесь её окончания — больше ничего нажимать не нужно.' : 'Получаем общие цены. Дождитесь окончания запроса.');
   try {
     let result;
-    do { await new Promise(resolve => setTimeout(resolve, 800)); result = await api(`/api/jobs/${started.id}`); } while (['queued', 'running'].includes(result.status));
+    do {
+      await new Promise(resolve => setTimeout(resolve, 800));result=await api(`/api/jobs/${started.id}`);
+      if(result.progress)document.dispatchEvent(new CustomEvent('albion-job-progress',{detail:{kind:started.kind,progress:result.progress}}));
+    } while (['queued', 'running'].includes(result.status));
     await status(); await load();
     if (!$('craft-view').hidden) await crafting?.refresh();
     if (result.status !== 'done') {
@@ -192,6 +195,7 @@ async function trackJob(started) {
     }
     if (catalog) notice(`Список готов: ${fmt(result.result.items)} предметов. Теперь выберите пример или введите название в поиск ниже.`);
     else if(started.kind==='history') notice(result.result.history?`Получено исторических интервалов: ${fmt(result.result.history)}. График обновлён.`:'За выбранный период источник не сообщил историю. Пропуски не означают нулевые продажи.');
+    else if(started.kind==='craft-ideas')notice(`Данные для подбора обновлены: ${fmt(result.result.prices)} цен, ${fmt(result.result.history)} интервалов продаж.`);
     else notice(result.result.prices ? `Получено ценовых наблюдений: ${fmt(result.result.prices)}. Исторических интервалов: ${fmt(result.result.history)}. ${started.kind==='craft'?'Цены набора обновлены в списке материалов.':'Цены показаны в таблице.'}` : 'Запрос выполнен, но источник пока не сообщил цен для выбранных условий. Попробуйте другой город или качество. «Нет цены» не означает нулевую стоимость.');
   } finally { state.activeJob = null; setBusy(false); }
 }

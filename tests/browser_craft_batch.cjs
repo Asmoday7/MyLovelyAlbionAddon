@@ -8,6 +8,7 @@ const base=process.env.ALBION_SMOKE_URL;
  page.on('pageerror',e=>{errors.push(e.message);console.error('Browser error:',e.message);});page.on('request',r=>{if(!r.url().startsWith(base))external.push(r.url());});
  try{
   await page.goto(base);await page.waitForSelector('.market-card');await page.locator('[data-view="craft"]').click();
+  await page.locator('#craft-manual>summary').click();
   await page.waitForFunction(()=>document.querySelector('#craft-item-title').textContent.includes('4.0'));
   await page.locator('#craft-city').selectOption('1002');await page.locator('#craft-sale-city').selectOption('1002');
   assert.equal(await page.locator('#craft-selector').getAttribute('open'),null);
@@ -22,6 +23,7 @@ const base=process.env.ALBION_SMOKE_URL;
   await page.locator('#batch-add').click();await page.waitForFunction(()=>document.querySelector('#batch-count').textContent==='2');
   assert.equal(await page.locator('#batch-materials tr').count(),3);
   assert.match(await page.locator('[data-material-id="T4_CLOTH"]').textContent(),/88/);
+  await page.locator('#batch-settings>summary').click();
   await page.locator('#batch-no-focus').fill('20');await page.locator('#batch-no-focus').blur();
   await page.waitForFunction(()=>document.querySelector('#batch-profit-no-focus').textContent.includes('6 097'));
   await page.locator('#batch-focus').fill('40');await page.locator('#batch-focus').blur();
@@ -50,20 +52,18 @@ const base=process.env.ALBION_SMOKE_URL;
   await page.reload();await page.locator('[data-view="craft"]').click();
   await page.waitForFunction(()=>document.querySelector('#batch-count').textContent==='2');
   assert.equal(await page.getByRole('spinbutton',{name:'Уже куплено Pine Planks',exact:true}).inputValue(),'160');
+  await page.locator('#craft-manual>summary').click();
   await page.locator('#craft-scope').selectOption('private');
   await page.waitForFunction(()=>document.querySelector('#batch-context').textContent.includes('мои наблюдения'));
-  // Invalid public downloads have a visible explanation and preserve the draft.
+  // The explicitly labelled button enables downloads inline and preserves the draft.
+  assert.match(await page.locator('#batch-refresh').textContent(),/Включить общие цены/);
+  assert.equal(await page.locator('#batch-lines .craft-opportunity').count(),2);
   await page.locator('#batch-refresh').click();
-  await page.waitForFunction(()=>document.querySelector('#batch-feedback').textContent.includes('Публичные загрузки выключены'));
-  assert.equal(await page.locator('#batch-lines tr').count(),2);
-  assert.equal(await page.locator('#craft-scope').inputValue(),'private');
-  await page.request.post(base+'/api/settings/public-api',{data:{enabled:true}});
-  await page.locator('#batch-refresh').click();
-  await page.waitForFunction(()=>document.querySelector('#batch-feedback').textContent.includes('Обновление завершено'));
+  await page.waitForFunction(()=>document.querySelector('#batch-feedback').textContent.includes('продажи всех рамок обновлены'));
   assert.equal(await page.locator('#craft-scope').inputValue(),'all');
   assert.match(await page.locator('#batch-profit-no-focus').textContent(),/6 992/);
   await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.body.scrollWidth),390);
   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
-  console.log('PASS: mixed recipes, aggregated quantities, no/focus profit, partial liquidity, independent shopping queue, persistent progress, inline public-download error, mobile. Synthetic fixtures only.');
+  console.log('PASS: mixed recipes, aggregated quantities, no/focus profit, partial liquidity, independent shopping queue, persistent progress, inline public download and mobile. Synthetic fixtures only.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});
