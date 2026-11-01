@@ -3,6 +3,21 @@ import re
 from .domain import region, quality, location, number, timestamp, utcnow
 
 
+def rebuild_order_quotes(db, server, groups, source, now):
+    """Project durable last-known orders without changing their observation times."""
+    for city, uid, q, side in groups:
+        kind = "sell_price_min" if side == "offer" else "buy_price_max"
+        best = db.execute("""SELECT price,observed_at FROM orders WHERE server=? AND location=? AND item_id=?
+            AND quality=? AND side=? AND source=? AND expires>? AND amount>0 AND price>0
+            ORDER BY price """ + ("ASC" if side == "offer" else "DESC") + ",observed_at DESC LIMIT 1",
+            (server, city, uid, q, side, source, now)).fetchone()
+        db.execute("DELETE FROM quotes WHERE server=? AND location=? AND item_id=? AND quality=? AND kind=? AND source=?",
+                   (server, city, uid, q, kind, source))
+        if best:
+            put_quote(db, server, city, uid, q, kind, best["price"], best["observed_at"], now,
+                      source, "partial scan; observation time is local receipt; depth unknown")
+
+
 def put_quote(db, server, city, item, q, kind, price, observed, received, source, limitation):
     if price <= 0 or observed < 946684800 or observed > received + 300:
         return 0  # AODP zero and year 0001 mean missing, not a free item.
@@ -119,19 +134,7 @@ def local_orders(store, payload, server="east", source="data-client", scaled=Tru
                 VALUES(?,?,?,?,?,'',?,0)""", (uid, uid, uid, int(match[1]) if match else 0, enchant, uid.casefold()))
             groups.add((city, uid, q, side))
             count += 1
-        for city, uid, q, side in groups:
-            kind = "sell_price_min" if side == "offer" else "buy_price_max"
-            best = db.execute("""SELECT price,observed_at FROM orders WHERE server=? AND location=? AND item_id=?
-                AND quality=? AND side=? AND source=? AND expires>? AND amount>0 AND price>0
-                ORDER BY price """ + ("ASC" if side == "offer" else "DESC") + ",observed_at DESC LIMIT 1",
-                (server, city, uid, q, side, source, now)).fetchone()
-            # A changed best order may legitimately have an older observation time.
-            # Rebuild this projection from durable last-known orders, never delete unseen orders.
-            db.execute("DELETE FROM quotes WHERE server=? AND location=? AND item_id=? AND quality=? AND kind=? AND source=?",
-                       (server, city, uid, q, kind, source))
-            if best:
-                put_quote(db, server, city, uid, q, kind, best["price"], best["observed_at"], now,
-                          source, "partial scan; observation time is local receipt; depth unknown")
+        rebuild_order_quotes(db, server, groups, source, now)
         # Expiry is explicit, unlike disappearance from an incomplete page. Keep a short grace period.
         db.execute("DELETE FROM orders WHERE source=? AND server=? AND expires<?", (source, server, now-7*86400))
         event(db, server, source, "orders", count)

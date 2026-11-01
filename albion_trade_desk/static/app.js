@@ -126,6 +126,7 @@ async function load() {
 }
 async function status() {
   const data = await api('/api/status');
+  $('app-version').textContent = `Версия ${data.version}`;
   state.catalog = data.items;marketNames=data.markets;
   $('item-count').textContent = fmt(data.items); $('quote-count').textContent = fmt(data.quotes); $('history-count').textContent = fmt(data.history);
   if (!$('city').options.length) {
@@ -316,7 +317,9 @@ setInterval(async () => {
     if (watchingFeed) await status();
     else {
       const p = await api('/api/private/status'); renderPrivate(p);
-      if (p.enabled && !$('market-view').hidden && p.last_received_at !== state.lastReceived) { state.lastReceived = p.last_received_at; await load(); }
+      if (!$('market-view').hidden && !state.busy && p.last_received_at !== state.lastReceived) {
+        await load(); await marketView.refresh(); state.lastReceived = p.last_received_at;
+      }
     }
   } catch (e) { showError(e); }
   finally { state.polling = false; }

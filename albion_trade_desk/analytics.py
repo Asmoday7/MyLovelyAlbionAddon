@@ -62,13 +62,16 @@ def observed_quotes(db, server, city, uid, q, sources, max_age, now):
             continue
         if city=='3003' and row['kind']=='sell_price_min':
             continue
-        live=True
+        live=True;last_scan=None
         if row['source'] in ('data-client','private-client','aodp-nats'):
-            live=db.execute("""SELECT 1 FROM orders WHERE server=? AND location=? AND item_id=? AND quality=?
-                AND source=? AND side=? AND price=? AND amount>0 AND expires>? LIMIT 1""",
-                (server,city,uid,q,row['source'],'offer' if row['kind']=='sell_price_min' else 'request',row['price'],now)).fetchone() is not None
+            seen=db.execute("""SELECT MAX(observed_at) last_scan,
+                MAX(CASE WHEN price=? AND amount>0 AND expires>? THEN 1 ELSE 0 END) live
+                FROM orders WHERE server=? AND location=? AND item_id=? AND quality=? AND source=? AND side=?""",
+                (row['price'],now,server,city,uid,q,row['source'],'offer' if row['kind']=='sell_price_min' else 'request')).fetchone()
+            live=bool(seen['live']);last_scan=seen['last_scan']
         age=max(0,now-row['observed_at'])
-        candidates[row['kind']].append({**dict(row),'age_seconds':age,'fresh':bool(live and age<=max_age)})
+        candidates[row['kind']].append({**dict(row),'age_seconds':age,'fresh':bool(live and age<=max_age),
+            'last_scan_at':last_scan,'last_scan_age_seconds':max(0,now-last_scan) if last_scan is not None else None})
     return {kind:next((r for r in rows if r['fresh']),rows[0]) for kind,rows in candidates.items()}
 
 

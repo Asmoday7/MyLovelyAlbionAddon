@@ -11,6 +11,15 @@ MARKETS = {"2004": "Bridgewatch", "3008": "Martlock", "1002": "Lymhurst",
            "4002": "Fort Sterling", "7": "Thetford", "3005": "Caerleon",
            "5003": "Brecilien", "3003": "Black Market"}
 
+# Market packets can carry either the city cluster or its auction-house zone.
+# 3003 is deliberately absent: bare 3003 denotes Black Market in market data.
+MARKET_ALIASES = {"0": "7", "1000": "1002", "2000": "2004", "3004": "3008",
+                  "4000": "4002", "5000": "5003", "301": "7", "1301": "1002",
+                  "2301": "2004", "3301": "3008", "4301": "4002", "3013": "3005"}
+HELLDEN_MARKETS = {"0000-HellDen": "7", "1000-HellDen": "1002", "2000-HellDen": "2004",
+                   "3004-HellDen": "3008", "3003-HellDen": "3005",
+                   "4000-HellDen": "4002", "5000-HellDen": "5003"}
+
 
 def utcnow():
     return datetime.now(timezone.utc).timestamp()
@@ -30,12 +39,13 @@ def timestamp(value):
 def location(value):
     text = str(value).strip()
     # Native AOD locations differ from normalized REST locations. Preserve unknowns.
+    if text in HELLDEN_MARKETS:
+        return HELLDEN_MARKETS[text]
     if text.endswith('-Auction2'):
         text = text.removesuffix('-Auction2')
     if text.isdecimal():
         text = str(int(text))
-    text = {"301":"7", "1301":"1002", "2301":"2004", "3301":"3008",
-            "4301":"4002", "3013":"3005"}.get(text, text)
+    text = MARKET_ALIASES.get(text, text)
     return next((k for k, v in MARKETS.items() if v.casefold() == text.casefold()), text)
 
 

@@ -16,7 +16,7 @@
       <button class="nav" data-view="sources"><span>⇄</span> Источники данных</button>
     </details>
   </nav>
-  <div class="sidebar-note"><span class="status-dot"></span> Работает на вашем ПК<p>Всё сохраняется локально.</p><button class="quiet" id="sidebar-help">Нужна подсказка? →</button></div>
+  <div class="sidebar-note"><span class="status-dot"></span> Работает на вашем ПК<p>Всё сохраняется локально.</p><p id="app-version"></p><button class="quiet" id="sidebar-help">Нужна подсказка? →</button></div>
 </aside>
 <main>
   <header class="topbar"><div class="breadcrumbs">Ваше рабочее место <span>/</span> <strong id="breadcrumb">Цены предметов</strong></div><label class="server-label">Игровой сервер <select id="server" aria-label="Сервер"><option value="east">Азия · Asia / East</option><option value="west">Америка · Americas</option><option value="europe">Европа · Europe</option></select></label></header>
@@ -125,6 +125,7 @@
 <div class="period-buttons"><button data-period="6">6 часов</button><button data-period="12">12 часов</button><button data-period="24" class="active">24 часа</button><button data-period="168">7 дней</button><button data-period="672">4 недели</button><label class="check"><input id="history-custom" type="checkbox">Свои даты</label></div>
 <div id="history-custom-fields" class="detail-tools" hidden><label>С<input id="history-start" type="datetime-local"></label><label>По<input id="history-end" type="datetime-local"></label><button id="history-apply">Показать</button></div>
 <div id="history-summary"></div><div id="history-chart"></div><p id="history-hover" class="history-hover"></p><button id="history-fetch">Загрузить общую историю за этот период</button>
+<p id="history-received" class="muted"></p>
 <p id="history-feedback" role="status" aria-live="polite"></p>
 <p id="history-source-note" class="muted"></p>
 <p class="caveat">Линия — средняя цена, столбики — объём продаж. «≥» означает известную часть продаж. Отсутствующие наблюдения не считаются нулевыми продажами. История каждого качества показана отдельно.</p></section>

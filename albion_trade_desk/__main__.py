@@ -6,6 +6,7 @@ import webbrowser
 import sqlite3
 from pathlib import Path
 from contextlib import closing
+from . import __version__
 from .storage import Store, default_directory
 from .instance import InstanceLock
 from .transport import HttpClient, sync_catalog, probe
@@ -46,6 +47,7 @@ def main():
                 print(f"Порт {args.port} недоступен. Выбран свободный порт {server.server_port}.", flush=True)
             address = f"http://127.0.0.1:{server.server_port}"
             print("\nAlbion Trade Desk запущен.", flush=True)
+            print("Версия: " + __version__, flush=True)
             print("Адрес приложения: " + address, flush=True)
             print("Окно можно свернуть. Все действия выполняйте в браузере.", flush=True)
             print("Первый запуск: откройте «Мои наблюдения» и нажмите «Запустить сборщик».", flush=True)

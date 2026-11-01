@@ -123,6 +123,8 @@ class Store:
             db.executescript(FEED_SCHEMA)
             if 'orders_processed' not in {r['name'] for r in db.execute('PRAGMA table_info(private_sessions)')}:
                 db.execute('ALTER TABLE private_sessions ADD COLUMN orders_processed INTEGER NOT NULL DEFAULT 0')
+        from .market_repair import repair_market_locations
+        repair_market_locations(self)
 
     @contextmanager
     def connect(self):

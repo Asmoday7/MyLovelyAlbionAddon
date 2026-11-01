@@ -1,10 +1,11 @@
 import {qualityGrid,qualityNames} from './quality.js';
 export function createMarketView({api,el,fmt,notice,showError,job,filters,markets,craft}) {
   const $=id=>document.getElementById(id);
-  let current=null,marketData=null,city=null,quality=1,period=24,seq=0,itemSeq=0,chartData=null;
+  let current=null,marketData=null,city=null,quality=1,period=24,seq=0,itemSeq=0,chartData=null,detailReady=false;
   const nativeLabel=data=>data.native_timescale===1?'7 дней':'4 недели';
   function chart(data) {
     chartData=data;const wrap=$('history-chart');wrap.replaceChildren();
+    $('history-received').textContent=data.last_received_at?`История получена: ${new Date(data.last_received_at*1000).toLocaleString('ru-RU')}. Даты на графике обозначают продажи, а не время сканирования.`:'';
     const native=data.coverage_model==='native-points';
     const summary=$('history-summary');summary.replaceChildren();
     summary.append(el('strong',data.known_quantity==null?'Нет данных':`${data.volume==null?'≥ ':''}${fmt(data.known_quantity)} продано`),
@@ -55,7 +56,7 @@ export function createMarketView({api,el,fmt,notice,showError,job,filters,market
       $('detail-cities').replaceChildren(table);
   }
   async function open(item){
-    const request=++itemSeq;++seq;current=item;city=filters().city;quality=Number.isInteger(Number(item.quality))?Number(item.quality):item.quotes.sell_price_min?.quality||item.quotes.buy_price_max?.quality||1;
+    const request=++itemSeq;++seq;detailReady=false;current=item;city=filters().city;quality=Number.isInteger(Number(item.quality))?Number(item.quality):item.quotes.sell_price_min?.quality||item.quotes.buy_price_max?.quality||1;
     $('detail-title').textContent=item.name_ru;$('detail-id').textContent=`${item.name_en} · ${item.id} · ${item.server.toUpperCase()}`;
     $('detail-prices').replaceChildren(el('p','Загрузка…'));$('item-dialog').showModal();
     try {
@@ -68,8 +69,16 @@ export function createMarketView({api,el,fmt,notice,showError,job,filters,market
       const end=Math.floor(Date.now()/3600000)*3600000;$('history-end').value=localInput(end);$('history-start').value=localInput(end-period*3600000);$('history-custom').checked=false;$('history-custom-fields').hidden=true;
       prices();
       renderCities();$('detail-craft').hidden=!item.has_recipe;$('detail-refresh').disabled=filters().scope==='private';
+      detailReady=true;
       await loadHistory();
     }catch(e){showError(e);$('detail-prices').append(el('p',e.message,'error'));}
+  }
+  async function refresh(){
+    if(!$('item-dialog').open||!detailReady)return;
+    const request=++itemSeq,item=current;
+    const result=await api('/api/item?'+new URLSearchParams({...filters(),id:item.id,server:item.server}));
+    if(request!==itemSeq||!$('item-dialog').open||current!==item)return;
+    marketData=result;prices();renderCities();await loadHistory();
   }
   $('detail-city').onchange=async()=>{city=$('detail-city').value;prices();try{await loadHistory();}catch(e){showError(e);}};
   $('history-quality').onchange=()=>{quality=Number($('history-quality').value);loadHistory().catch(showError);};
@@ -93,5 +102,5 @@ export function createMarketView({api,el,fmt,notice,showError,job,filters,market
   };
   $('detail-refresh').onclick=async()=>{try{$('detail-refresh').disabled=true;await job('/api/market/refresh',{items:[current.id],server:current.server,cities:[city],qualities:[1,2,3,4,5]});marketData=await api('/api/item?'+new URLSearchParams({...filters(),id:current.id,server:current.server}));prices();renderCities();}catch(e){showError(e);$('history-hover').textContent=e.message;}finally{$('detail-refresh').disabled=filters().scope==='private';}};
   $('detail-craft').onclick=()=>{$('item-dialog').close();craft(current.id,quality);};
-  return {open,qualityGrid:rows=>qualityGrid(rows,{el,fmt,bm:filters().city==='3003',compact:true})};
+  return {open,refresh,qualityGrid:rows=>qualityGrid(rows,{el,fmt,bm:filters().city==='3003',compact:true})};
 }

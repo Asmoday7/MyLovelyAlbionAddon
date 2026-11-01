@@ -45,6 +45,7 @@ def native_series(store, query, start, end, server, city, q, scope):
         'volume': None, 'known_quantity': quantity,
         'vwap': sum(p['silver'] for p in chosen.values() if p['quantity'])/quantity if quantity else None,
         'coverage_model': 'native-points', 'native_timescale': scale,
+        'last_received_at': max(p['received_at'] for p in chosen.values()),
         'native_period_hours': 168 if scale == 1 else 672, 'point_count': len(points),
         'window_model': 'original game timestamps; interval coverage not inferred'}
 
@@ -95,6 +96,7 @@ def series(store, query, now=None):
         'step_hours':step//3600,'points':rows,'known_hours':known,'expected_hours':expected,
         'volume':quantity if known==expected else None,'known_quantity':quantity if known else None,
         'vwap':sum(p['average']*p['quantity'] for p in accepted)/quantity if quantity else None,
+        'last_received_at':max((p['received_at'] for p in accepted),default=None),
         'window_model':'completed UTC hours; start-labelled, live boundary validation pending'}
 
 
