@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler
 from .server_socket import LoopbackHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from . import __version__, analytics, ingestion, crafting, history_view, refining
+from . import __version__, analytics, ingestion, crafting, craft_batch, history_view, refining
 from .domain import SERVERS, MARKETS, quality, region, location, utcnow
 from .export import csv_bytes, xlsx_bytes
 from .transport import HttpClient, sync_catalog, refresh_market
@@ -157,6 +157,10 @@ def make_server(store, port=8765):
                     self.respond(crafting.saved(store))
                 elif path == "/api/craft/pack":
                     self.respond(crafting.load(store,query.get('id','')))
+                elif path == '/api/craft/batches':
+                    self.respond(craft_batch.saved(store))
+                elif path == '/api/craft/batch':
+                    self.respond(craft_batch.load(store,query.get('id','')))
                 elif path == "/api/item":
                     uid = query.get("id", "")
                     records = []
@@ -184,7 +188,7 @@ def make_server(store, port=8765):
                             source.backup(target)
                         self.respond(p.read_bytes(), content_type="application/vnd.sqlite3", filename="trade-desk-backup.sqlite3")
                 else:
-                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/market_view.js":"market_view.js", "/quality.js":"quality.js", "/cloth.js":"cloth.js", "/styles.css": "styles.css"}.get(path)
+                    name = {"/": "index.html", "/app.js": "app.js", "/crafting.js": "crafting.js", "/craft_batch.js":"craft_batch.js", "/market_view.js":"market_view.js", "/quality.js":"quality.js", "/cloth.js":"cloth.js", "/styles.css": "styles.css"}.get(path)
                     if name:
                         self.respond((STATIC / name).read_bytes(), content_type=(mimetypes.guess_type(name)[0] or "text/plain") + "; charset=utf-8")
                     else:
@@ -219,6 +223,20 @@ def make_server(store, port=8765):
                     self.respond(jobs.submit(lambda: history_view.refresh(client,body),"history"),202)
                 elif path == "/api/craft/plan":
                     self.respond(crafting.plan(store,body))
+                elif path == '/api/craft/batch/plan':
+                    self.respond(craft_batch.plan(store,body))
+                elif path == '/api/craft/batch/crystal':
+                    self.respond(craft_batch.crystal_set(store,body))
+                elif path == '/api/craft/batch/save':
+                    self.respond(craft_batch.save(store,body))
+                elif path == '/api/craft/batch/loadouts':
+                    self.respond(craft_batch.loadouts(store,body))
+                elif path == '/api/craft/batch/delete':
+                    with store.connect() as db: db.execute('DELETE FROM craft_batches WHERE id=?',(str(body['id']),))
+                    self.respond({'ok':True})
+                elif path == '/api/craft/batch/refresh':
+                    cfg=craft_batch.config(body)
+                    self.respond(jobs.submit(lambda: craft_batch.refresh(client,cfg),'craft'),202)
                 elif path == "/api/craft/packs":
                     self.respond(crafting.save(store,body))
                 elif path == "/api/craft/delete":

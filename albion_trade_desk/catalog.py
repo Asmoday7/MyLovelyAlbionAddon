@@ -62,6 +62,7 @@ def import_recipes(db, raw):
                            (data.get("@shopcategory", kind), data.get("@shopsubcategory1", ""),
                             float(data["@weight"]) if "@weight" in data else None,
                             json.dumps({"kind": kind, "subcategory2": data.get("@shopsubcategory2"),
+                                        "max_stack": data.get("@maxstacksize"),
                                         "upgrade": data.get("upgraderequirements")}, ensure_ascii=False), uid))
                 db.execute("DELETE FROM recipes WHERE item_id=?", (uid,))
                 for variant, recipe in enumerate(many(data.get("craftingrequirements"))):

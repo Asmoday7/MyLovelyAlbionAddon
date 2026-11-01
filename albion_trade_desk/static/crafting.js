@@ -1,4 +1,5 @@
 import {qualityGrid,qualityNames} from './quality.js';
+import {createCraftBatch} from './craft_batch.js';
 // The server owns recipes, quantities, provenance and cost calculations.
 export function createCrafting({api, fmt, date, el, notice, showError, job, showView, catalog, initialCity, initialScope, maxAge}) {
   const $ = id => document.getElementById(id);
@@ -26,6 +27,8 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     chooseEnchantment(item.enchantment);
     renderSearch();
     await refreshPlan(true);
+    $('craft-selection').textContent=`${item.name_ru} · ${item.tier}.${item.enchantment}`;
+    $('craft-selector').open=false;
   }
   function renderSearch() {
     $('craft-search-results').replaceChildren();
@@ -64,8 +67,8 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     if (force || signature!==s.signature) {s.signature=signature;renderPlan();}
   }
   function copyName(row) {return $('craft-copy-language').value==='ru'?row.name_ru:row.name_en;}
-  async function copy(text) {
-    try {await navigator.clipboard.writeText(text);notice(`Скопировано: ${text.length>110?'список материалов':text}. Вставьте в поиск рынка вручную.`);}
+  async function copy(text,target='search') {
+    try {await navigator.clipboard.writeText(text);notice(target==='loadout'?'Код комплекта скопирован. В Albion выберите «Вставить текст» / Paste Text, проверьте состав и сохраните.':`Скопировано: ${text.length>110?'список материалов':text}. `+(target==='quantity'?'Вставьте в поле количества в игре.':target==='list'?'Список можно сохранить в заметках.':'Вставьте в поиск рынка вручную.'));}
     catch { $('copy-text').value=text;$('copy-dialog').showModal();$('copy-text').focus();$('copy-text').select(); }
   }
   function sourceName(q) {return q?.source==='private-client'?'Моё наблюдение':q?.source==='data-client'?'Старое локальное':'Общие данные';}
@@ -137,6 +140,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     await search(c.item_id,true,c.item_id);
     $('craft-recipe').value=String(c.variant);
     await refreshPlan(true);await listPacks();
+    await batch.contextChanged();
   }
   async function save(asCopy=false) {
     if (!s.plan) return;
@@ -160,6 +164,7 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
       s.initialized=true;
     }
     await listPacks();
+    await batch.open();
     if (!s.family) {$('craft-search').value='Forgebark';await search('Forgebark',true);}
     else await refreshPlan(true);
   }
@@ -168,13 +173,21 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     $('craft-city').value=initialCity()==='3003'?'1002':initialCity();$('craft-sale-city').value=initialCity();
     $('craft-scope').value=initialScope();$('craft-quality').value=String(['auto','all'].includes(String(outputQuality))?'auto':outputQuality);
     $('craft-search').value=uid;await search(uid,true,uid);
+    await batch.contextChanged();
   }
+  const batch=createCraftBatch({api,el,fmt,notice,showError,job,copy,context:()=>{
+    const c=cfg();return Object.fromEntries(['server','city','sale_city','scope','max_age_hours'].map(k=>[k,c[k]]));
+  },applyContext:c=>{
+    $('server').value=c.server;$('craft-city').value=c.city;$('craft-sale-city').value=c.sale_city;
+    $('craft-scope').value=c.scope;$('craft-age').value=c.max_age_hours;
+  }});
+  on('batch-add',()=>batch.add(s.plan));
   let debounce;
   $('craft-search').addEventListener('input',()=>{clearTimeout(debounce);debounce=setTimeout(()=>search($('craft-search').value).catch(showError),220);});
   $('craft-tier').addEventListener('change',()=>{chooseEnchantment(Number($('craft-enchantment').value));refreshPlan(true).catch(showError);});
   $('craft-enchantment').addEventListener('change',()=>{options($('craft-recipe'),[[0,'Основной рецепт']],0);refreshPlan(true).catch(showError);});
-  for (const id of ['craft-units','craft-quality','craft-city','craft-sale-city','craft-scope','craft-age','craft-recipe']) $(id).addEventListener('change',()=>refreshPlan(true).catch(showError));
-  $('server').addEventListener('change',()=>{if (!$('craft-view').hidden) refreshPlan(true).catch(showError);});
+  for (const id of ['craft-units','craft-quality','craft-city','craft-sale-city','craft-scope','craft-age','craft-recipe']) $(id).addEventListener('change',async()=>{try{await refreshPlan(true);if(['craft-city','craft-sale-city','craft-scope','craft-age'].includes(id))await batch.contextChanged();}catch(e){showError(e);}});
+  $('server').addEventListener('change',async()=>{if (!$('craft-view').hidden)try{await refreshPlan(true);await batch.contextChanged();}catch(e){showError(e);}});
   on('craft-forgebark',()=>{s.id=null;$('craft-search').value='Forgebark';return search('Forgebark',true);});
   on('craft-save',()=>save());on('craft-save-copy',()=>save(true));
   on('craft-delete',async()=>{await api('/api/craft/delete',{id:s.id});s.id=null;renderPlan();await listPacks();notice('Набор убран из сохранённых. Список остался на экране — его можно сохранить снова. Рыночные данные не удалялись.');});
@@ -185,16 +198,16 @@ export function createCrafting({api, fmt, date, el, notice, showError, job, show
     if (!next) {notice('Для всех материалов и готового предмета уже есть свежие цены. Это не означает полного сканирования рынка.');return;}
     s.focused=next.id;await copy(copyName(next));renderPlan();
   });
-  on('craft-copy-all',()=>copy(s.plan.resources.map(r=>`${copyName(r)} · ${r.tier}.${r.enchantment} × ${fmt(r.quantity)}`).join('\n')));
+  on('craft-copy-all',()=>copy(s.plan.resources.map(r=>`${copyName(r)} · ${r.tier}.${r.enchantment} × ${fmt(r.quantity)}`).join('\n'),'list'));
   on('craft-public-refresh',async()=>{await job('/api/craft/refresh',cfg());await refreshPlan(true);});
   on('craft-open-private',()=>showView('private'));
   on('craft-load-catalog',()=>{showView('market');return job('/api/catalog/sync',{});});
   on('copy-close',()=>$('copy-dialog').close());
   setInterval(async()=>{
-    if (document.hidden||$('craft-view').hidden||!s.plan||s.polling) return;
+    if (document.hidden||$('craft-view').hidden||s.polling) return;
     s.polling=true;
-    try {await refreshPlan();} catch(e) {if(s.lastError!==e.message){s.lastError=e.message;showError(e);}}
+    try {await refreshPlan();await batch.refresh();} catch(e) {if(s.lastError!==e.message){s.lastError=e.message;showError(e);}}
     finally {s.polling=false;}
   },3000);
-  return {open,openItem,updateContext,refresh:()=>refreshPlan(true)};
+  return {open,openItem,updateContext,refresh:async()=>{await refreshPlan(true);await batch.refresh(true);}};
 }

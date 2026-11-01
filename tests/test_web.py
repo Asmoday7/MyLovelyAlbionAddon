@@ -35,7 +35,7 @@ class WebTests(unittest.TestCase):
         with self.request('/api/market?search=T4_BAG') as r:
             data = json.load(r)
         self.assertEqual(data['rows'][0]['name_ru'], 'Сумка')
-        for path in ('/', '/app.js', '/styles.css'):
+        for path in ('/', '/app.js', '/crafting.js', '/craft_batch.js', '/styles.css'):
             with self.request(path) as r:
                 self.assertEqual(r.status, 200)
                 self.assertGreater(len(r.read()), 200)

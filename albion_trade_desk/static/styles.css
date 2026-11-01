@@ -453,3 +453,46 @@ td { font-weight: 550; }
 @media(max-width:1200px) { .onboarding.ready .onboarding-copy { display: block; } }
 .quality-price .quality-age { display: block; flex-basis: 100%; font-size: 12px; line-height: 1.4; }
 .market-card.selected { border-color: #c88c65; background: #fff2e5; }
+#craft-workspace.craft-layout { display: block; }
+#craft-workspace .craft-editor .craft-controls { grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); }
+#craft-workspace .craft-editor .craft-context>label { grid-column: auto; }
+#craft-workspace .craft-builder, #craft-workspace .craft-saved, .batch-workspace { margin-bottom: 20px; }
+#craft-selector summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; cursor: pointer; }
+#craft-selector summary:before { content: '▸'; color: #aa6945; }
+#craft-selector[open] summary:before { content: '▾'; }
+#craft-selector .craft-search-results { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); max-height: 290px; overflow-y: auto; padding: 4px; }
+.craft-preview>summary, .craft-saved>summary, .batch-settings>summary, #batch-saved-panel>summary { cursor: pointer; font-weight: 650; padding: 8px 0; }
+.craft-preview { margin-top: 25px; }
+.batch-workspace { min-width: 0; }
+.batch-workspace h2 { margin: 0; }
+.batch-workspace .craft-section-heading { flex-wrap: wrap; }
+.batch-workspace input, .batch-workspace select { max-width: 100%; }
+#batch-name { width: 220px; }
+.batch-settings { margin: 24px 0; }
+.batch-table { width: 100%; margin: 16px 0 22px; }
+.batch-table th { white-space: nowrap; }
+.batch-table th, .batch-table td { padding: 12px 10px; white-space: normal; overflow-wrap: anywhere; }
+.batch-table td { vertical-align: top; min-width: 90px; }
+.batch-table td:first-child { min-width: 200px; max-width: 285px; }
+.batch-table td>small { display: block; margin-top: 5px; font-size: 12px; color: var(--muted); }
+.batch-table input { width: 96px; }
+.batch-table select { width: 125px; }
+.batch-table details { margin-top: 10px; font-size: 12px; }
+.batch-table details summary { cursor: pointer; }
+.batch-table details label { display: flex; flex-direction: column; gap: 4px; margin: 9px 0; }
+.batch-table details input { width: 200px; }
+.batch-table .loss { color: #a13d50; }
+.batch-queue { margin: 24px 0; padding: 22px; border-radius: 14px; border: 1px solid #d7ae91; background: #fff3e5; }
+.batch-queue h3 { margin: 8px 0; }
+#batch-queue-quantity { display: block; font-size: 25px; color: #a46642; }
+.batch-queue label { display: flex; align-items: center; gap: 10px; }
+#batch-feedback:empty, #batch-context:empty { display: none; }
+.batch-loadout-result { background: #fff3e5; border: 1px solid #d7ae91; border-radius: 12px; padding: 20px; margin-top: 16px; }
+#batch-loadout-code { display: block; width: 100%; min-height: 100px; margin: 12px 0; font: 13px/1.5 monospace; overflow-wrap: anywhere; }
+@media(max-width:650px) {
+  .batch-workspace .craft-save-actions { width: 100%; }
+  #batch-name { flex: 1; min-width: 130px; }
+  .batch-workspace { padding: 16px; }
+  .batch-queue { padding: 15px; }
+  #craft-workspace .craft-editor .craft-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}

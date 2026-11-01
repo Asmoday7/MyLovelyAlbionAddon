@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS user_settings (key TEXT PRIMARY KEY, value TEXT NOT N
 CREATE TABLE IF NOT EXISTS craft_packs (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, config TEXT NOT NULL,
  created_at REAL NOT NULL, updated_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS craft_batches (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, config TEXT NOT NULL,
+ created_at REAL NOT NULL, updated_at REAL NOT NULL);
 """
 
 
