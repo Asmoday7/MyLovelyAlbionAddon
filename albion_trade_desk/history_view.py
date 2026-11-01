@@ -66,8 +66,6 @@ def series(store, query, now=None):
     scope=query.get('scope','all')
     if scope!='all' and scope not in SCOPES:raise ValueError('Неизвестный источник')
     native = native_series(store, query, start, end, server, city, q, scope)
-    if native is not None:
-        return native
     step=3600 if end-start<=48*3600 else 21600 if end-start<=7*86400 else 86400
     with store.connect() as db:
         points=[dict(p) for p in db.execute('''SELECT * FROM history WHERE server=? AND location=?
@@ -92,12 +90,15 @@ def series(store, query, now=None):
             'average':sum(p['average']*p['quantity'] for p in ps)/quantity if quantity else None,
             'sources':sorted({p['source'] for p in ps})})
     quantity=sum(p['quantity'] for p in accepted);known=len(covered);expected=(end-start)//3600
-    return {'server':server,'location':city,'quality':q,'scope':scope,'start':start,'end':end,
+    result = {'server':server,'location':city,'quality':q,'scope':scope,'start':start,'end':end,
         'step_hours':step//3600,'points':rows,'known_hours':known,'expected_hours':expected,
         'volume':quantity if known==expected else None,'known_quantity':quantity if known else None,
         'vwap':sum(p['average']*p['quantity'] for p in accepted)/quantity if quantity else None,
         'last_received_at':max((p['received_at'] for p in accepted),default=None),
         'window_model':'completed UTC hours; start-labelled, live boundary validation pending'}
+    # A sparse native view must not hide a complete downloaded series when
+    # both are allowed by the selected scope. Select one representation only.
+    return result if native is None or known==expected else native
 
 
 def refresh(client, query):

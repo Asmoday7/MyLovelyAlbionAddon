@@ -82,7 +82,22 @@ class BatchTests(unittest.TestCase):
         l=self.plan()['lines'][0]['liquidity']
         self.assertEqual((l['known_sales'],l['point_count'],l['recommended_units']),(28,28,2))
         self.assertFalse(l['complete']);self.assertTrue(l['above_recommendation'])
+        self.assertIsNone(l['estimated_days'])
         p=self.plan(scope='public');self.assertIsNone(p['lines'][0]['liquidity']['known_sales'])
+
+    def test_complete_public_history_is_not_hidden_by_a_sparse_native_view(self):
+        from albion_trade_desk.ingestion import history
+        end=NOW//3600*3600
+        feeds.ingest(self.store,'markethistories.ingest',{'AlbionId':1,'LocationId':'1002',
+            'QualityLevel':1,'Timescale':1,'MarketHistories':[{'Timestamp':(end-21600)*10000000+621355968000000000,
+                'ItemAmount':1,'SilverAmount':10000000}]},'east')
+        history(self.store,[{'item_id':STAFF,'location':'Lymhurst','quality':1,'data':[
+            {'timestamp':end-(i+1)*3600,'item_count':10,'avg_price':1000} for i in range(168)]}])
+        l=self.plan()['lines'][0]['liquidity']
+        self.assertTrue(l['complete']);self.assertEqual(l['known_sales'],1680)
+        self.assertAlmostEqual(l['estimated_days'],10*7/1680)
+        own=self.plan(scope='private')['lines'][0]['liquidity']
+        self.assertEqual(own['known_sales'],1);self.assertFalse(own['complete'])
 
     def test_per_station_rate_override_does_not_change_other_lines(self):
         lines=[{**self.body['lines'][0],'no_focus_return':30},self.body['lines'][1]]

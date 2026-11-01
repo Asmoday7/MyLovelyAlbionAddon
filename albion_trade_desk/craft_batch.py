@@ -130,7 +130,7 @@ def plan(store, body, now=None):
             'known_hours':history['known_hours'],'expected_hours':168,
             'point_count':history.get('point_count'), 'recommended_units':cap,
             'above_recommendation':cap is not None and produced>cap,
-            'estimated_days':value(produced*7/dec(known)) if known else None}
+            'estimated_days':value(produced*7/dec(known)) if known and history.get('volume') is not None else None}
         line_rows.append({'config':line, 'item':recipe['item'], 'operations':recipe['operations'],
             'produced':recipe['produced'],'overproduction':recipe['overproduction'],
             'gross_materials_cost':value(costs) if not missing else None,'known_materials_cost':value(costs),
