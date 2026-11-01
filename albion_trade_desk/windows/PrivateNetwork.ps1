@@ -3,6 +3,7 @@ function Get-PrivateRemoteRanges {
     @('0.0.0.0-126.255.255.255', '128.0.0.0-255.255.255.255', '::2-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
 }
 function Assert-PrivateProtection([string]$RuleName, [string]$ProgramPath) {
+    if (@(Get-Service BFE,MpsSvc | Where-Object Status -ne 'Running').Count) { throw 'Windows filtering/firewall service is not running.' }
     if (@(Get-NetFirewallProfile | Where-Object { -not $_.Enabled }).Count -gt 0) {
         throw 'Windows Firewall profiles must be enabled.'
     }

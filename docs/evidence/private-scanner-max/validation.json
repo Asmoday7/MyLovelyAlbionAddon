@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-01 Asia/Vladivostok",
+  "unit_tests": {
+    "run": 83,
+    "passed": 80,
+    "skipped": 3,
+    "failed": 0
+  },
+  "powershell_parser": "Microsoft PowerShell 7.4.7 Linux: all source files plus generated bootstrap/loader/guardian parsed successfully",
+  "powershell_archive_sha256": "cfd57927b7a0d9f2da400471ea8dadc3ceb52f5e4a4a9a51c20495b4071f055a",
+  "frozen_application": "Linux compiled application: HTTP, native fixtures, SQLite UPSERT/backup, XLSX and shutdown passed",
+  "browser": "Chromium desktop/mobile synthetic receiver passed; no external browser requests",
+  "windows_ci_configured_and_pushed": true,
+  "windows_ci_results_retrieved": false,
+  "windows_exe_retrieved": false,
+  "npcap_or_game_tested": false,
+  "full_privacy_certified": false,
+  "ci_return_write_permission": "not enabled; awaiting explicit approval after automatic-review rejection"
+}

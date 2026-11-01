@@ -15,3 +15,16 @@
 Полные [результаты unit](evidence/private-scanner-final/unittest.log), [структурированный результат](evidence/private-scanner-final/validation.json), [границы приватности и первый запуск](PRIVATE_SCANNER.md).
 
 Windows-проверка остаётся обязательной для UAC/NetSecurity/реального Npcap, совпадения exe установленного AOD с pinned hash, доставки с Asia/Europe/Americas, WebView2, всех исходящих UDP/DNS/TCP и поведения Firewall при остановке/обновлении. Текущий код не заявляет подтверждённую приватность и не включает сбор автоматически.
+
+
+## Доработки и повторная проверка
+
+Последний локальный прогон: **83 теста: 80 passed, 3 Windows-only skipped**. Добавлен нативный Windows preflight: неподходящий exe должен отвергаться до запуска и без изменения Firewall. В Linux он не исполнялся.
+
+Официальный PowerShell 7.4.7 Microsoft установлен только в /tmp после проверки SHA-256. Все исходные PS1 и сгенерированные bootstrap/loader/guardian успешно разобраны настоящим PowerShell parser. Это синтаксическая проверка PS7, не исполнение Windows API.
+
+С тем же PyInstaller spec собран настоящий **Linux** executable. Проверены HTTP, native fixtures, SQLite UPSERT/backup, Excel, остановка и удаление файлов после завершения. Это дополнительная проверка упаковки, не Windows exe. Chromium desktop/mobile повторно прошёл сценарий.
+
+Windows workflow в отдельной ветке codex/private-aod-windows теперь содержит тест упакованного exe и реального NetSecurity/WFP на synthetic probe. Результаты Windows из этой сессии пока не получены: репозиторий закрыт, GitHub API блокируется сетевой политикой. Автопроверка отклонила CI contents: write для возврата результата через Git; запрошено явное одноразовое разрешение, право не включено. Основная ветка не менялась.
+
+Актуальные [логи](evidence/private-scanner-max/unittest.log) и [структурированный отчёт](evidence/private-scanner-max/validation.json).

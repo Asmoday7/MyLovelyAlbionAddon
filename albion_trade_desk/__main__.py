@@ -12,6 +12,10 @@ from .transport import HttpClient, sync_catalog, probe
 
 
 def main():
+    # Frozen Windows apps can otherwise inherit a pipe codepage that cannot encode Russian.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='backslashreplace')
     parser = argparse.ArgumentParser(description="Albion Trade Desk — локальная экономическая аналитика")
     parser.add_argument("command", choices=("serve", "sync-catalog", "probe", "status"), nargs="?", default="serve")
     parser.add_argument("--data-dir", default=str(default_directory()))
