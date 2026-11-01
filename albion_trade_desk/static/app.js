@@ -195,7 +195,7 @@ async function trackJob(started) {
   } finally { state.activeJob = null; setBusy(false); }
 }
 async function job(path, body) {
-  if (state.busy) return;
+  if (state.busy) throw new Error('Обновление уже идёт. Дождитесь его завершения.');
   setBusy(true);
   try { const started = await api(path, body); await trackJob(started); }
   finally { if (!state.activeJob) setBusy(false); }
