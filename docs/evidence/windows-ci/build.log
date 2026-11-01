@@ -1,0 +1,68 @@
+353 INFO: PyInstaller: 6.16.0, contrib hooks: 2026.9
+353 INFO: Python: 3.12.10
+387 INFO: Platform: Windows-2025Server-10.0.26100-SP0
+387 INFO: Python environment: C:\hostedtoolcache\windows\Python\3.12.10\x64
+414 INFO: Module search paths (PYTHONPATH):
+['D:\\a\\MyLovelyAlbionAddon\\MyLovelyAlbionAddon',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python312.zip',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\DLLs',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64',
+ 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages',
+ 'D:\\a\\MyLovelyAlbionAddon\\MyLovelyAlbionAddon',
+ 'D:\\a\\MyLovelyAlbionAddon\\MyLovelyAlbionAddon']
+725 INFO: Appending 'datas' from .spec
+725 INFO: checking Analysis
+725 INFO: Building Analysis because Analysis-00.toc is non existent
+725 INFO: Looking for Python shared library...
+725 INFO: Using Python shared library: C:\hostedtoolcache\windows\Python\3.12.10\x64\python312.dll
+725 INFO: Running Analysis Analysis-00.toc
+725 INFO: Target bytecode optimization level: 0
+725 INFO: Initializing module dependency graph...
+727 INFO: Initializing module graph hook caches...
+747 INFO: Analyzing modules for base_library.zip ...
+2657 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+4266 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+5500 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+6152 INFO: Caching module dependency graph...
+6189 INFO: Analyzing D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\launcher.py
+6257 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+6969 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+7084 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+7231 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+7609 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+8046 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks'
+8115 INFO: Processing module hooks (post-graph stage)...
+8149 INFO: Performing binary vs. data reclassification (13 entries)
+8151 INFO: Looking for ctypes DLLs
+8159 INFO: Analyzing run-time hooks ...
+8159 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+8163 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+8165 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+8171 INFO: Creating base_library.zip...
+8192 INFO: Looking for dynamic libraries
+8373 INFO: Extra DLL search directories (AddDllDirectory): []
+8373 INFO: Extra DLL search directories (PATH): []
+9280 WARNING: Library not found: could not resolve 'api-ms-win-core-path-l1-1-0.dll', dependency of 'C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\python312.dll'.
+9286 INFO: Warnings written to D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\build\AlbionTradeDesk\warn-AlbionTradeDesk.txt
+9312 INFO: Graph cross-reference written to D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\build\AlbionTradeDesk\xref-AlbionTradeDesk.html
+9329 INFO: checking PYZ
+9331 INFO: Building PYZ because PYZ-00.toc is non existent
+9331 INFO: Building PYZ (ZlibArchive) D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\build\AlbionTradeDesk\PYZ-00.pyz
+9599 INFO: Building PYZ (ZlibArchive) D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\build\AlbionTradeDesk\PYZ-00.pyz completed successfully.
+9615 INFO: checking PKG
+9615 INFO: Building PKG because PKG-00.toc is non existent
+9615 INFO: Building PKG (CArchive) AlbionTradeDesk.pkg
+12777 INFO: Building PKG (CArchive) AlbionTradeDesk.pkg completed successfully.
+12781 INFO: Bootloader C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+12781 INFO: checking EXE
+12781 INFO: Building EXE because EXE-00.toc is non existent
+12781 INFO: Building EXE from EXE-00.toc
+12781 INFO: Copying bootloader EXE to D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\dist\AlbionTradeDesk.exe
+12785 INFO: Copying icon to EXE
+12787 INFO: Copying 0 resources to EXE
+12787 INFO: Embedding manifest in EXE
+12789 INFO: Appending PKG archive to EXE
+12795 INFO: Fixing EXE headers
+12881 INFO: Building EXE from EXE-00.toc completed successfully.
+12887 INFO: Build complete! The results are available in: D:\a\MyLovelyAlbionAddon\MyLovelyAlbionAddon\dist

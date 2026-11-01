@@ -1,0 +1,26 @@
+{
+  "run_id": "41271027327",
+  "source_commit": "e91c562aa93c9a09bf87b32005e1d483f6fc8843",
+  "exe_sha256": "9c8afd8957850a444da4e6e4c509796943658e3593a4ff739a25568a826590d7",
+  "game_tested": false,
+  "npcap_tested": false,
+  "full_client_privacy_certified": false,
+  "run_attempt": "1",
+  "tests": "success",
+  "windows": "Microsoft Windows NT 10.0.26100.0",
+  "build": "success",
+  "frozen": "success",
+  "firewall": "success",
+  "application_source_commit": "636c3a4de97000fc694200aa1541476219e3e16a",
+  "ci_only_delta": [
+    ".github/workflows/windows-build.yml"
+  ],
+  "unit_tests": {
+    "run": 83,
+    "passed": 83,
+    "skipped": 0
+  },
+  "output_branch": "refs/heads/builds/aod-e91c562aa93c-41271027327-1",
+  "temporary_write_job_removed": true,
+  "temporary_source_branch_deleted": true
+}
