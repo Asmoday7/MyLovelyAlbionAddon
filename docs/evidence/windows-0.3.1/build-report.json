@@ -1,0 +1,14 @@
+{
+  "npcap_tested": false,
+  "frozen": "success",
+  "tests": "success",
+  "source_commit": "1f230c1c60a349f2ea6cb9905dc66ac0efe6edf0",
+  "run_attempt": "1",
+  "windows": "Microsoft Windows NT 10.0.26100.0",
+  "firewall": "success",
+  "game_tested": false,
+  "full_client_privacy_certified": false,
+  "build": "success",
+  "run_id": "41871657888",
+  "exe_sha256": "5375a48da1f0a751c7aab7b5f32cde01a8e476bc3dbd859488fd7277d45fef27"
+}

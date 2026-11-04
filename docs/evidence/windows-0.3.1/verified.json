@@ -1,0 +1,9 @@
+{
+  "run_id": 41871657888,
+  "artifact_id": 13344857008,
+  "archive_sha256": "4c6aa7e7eda7ec065e51cef1dcedeaba5baac67073d80d31d5ec2e320ae677a5",
+  "exe_sha256": "5375a48da1f0a751c7aab7b5f32cde01a8e476bc3dbd859488fd7277d45fef27",
+  "exe_bytes": 10874923,
+  "source_commit": "1f230c1c60a349f2ea6cb9905dc66ac0efe6edf0",
+  "url": "https://github.com/Asmoday7/MyLovelyAlbionAddon/actions/runs/41871657888/artifacts/13344857008"
+}

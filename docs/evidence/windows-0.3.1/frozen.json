@@ -1,0 +1,9 @@
+{
+  "version": "0.3.1",
+  "frozen_http_sqlite_export_shutdown": "passed",
+  "sqlite_cleanup": "passed",
+  "all_305_recipes_analyzed_and_returned": "passed",
+  "mixed_page_rejection_diagnostic": "passed",
+  "game": "not run",
+  "aod": "not run"
+}
