@@ -1,13 +1,16 @@
 """Exercise a packaged executable with synthetic native HTTP; never start the game/AOD."""
 import argparse
+from contextlib import closing
 import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 import subprocess
 import tempfile
 import threading
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 
 def check(executable):
@@ -37,6 +40,30 @@ def check(executable):
             assert len(rows)==1 and rows[0]['amount']==3
             with urlopen(base+'/api/backup',timeout=20) as r: assert r.read().startswith(b'SQLite format 3')
             with urlopen(base+'/api/private/orders.xlsx?server=east',timeout=20) as r: assert r.read().startswith(b'PK')
+            with urlopen(base+'/api/status',timeout=20) as r: assert json.load(r)['version']=='0.3.1'
+            # Exercise this executable's full result, not just the source module.
+            with closing(sqlite3.connect(Path(directory)/'trade-desk.sqlite3')) as db:
+                with db:
+                    for i in range(305):
+                        uid=f'T4_MAIN_CHECK_{i:03}'
+                        db.execute('''INSERT INTO items(id,name_ru,name_en,tier,enchantment,search,catalog_at)
+                            VALUES(?,?,?,4,0,?,0)''',(uid,uid,uid,uid.casefold()))
+                        db.execute('INSERT INTO recipes VALUES(?,0,1,NULL,0,?)',
+                            (uid,json.dumps([{'item_id':'T4_RUNE','count':1,'returnable':True}])))
+            ideas=post('/api/craft/ideas',{'tier':'all','enchantment':'all','category':'all','show':'all','limit':8})
+            assert ideas['evaluated_recipes']==ideas['matched_recipes']==ideas['total']==len(ideas['rows'])==305
+            bad=[{**order,'Id':100+i} for i in range(50)]
+            bad[-1].update(ItemTypeId='T4_RUNE',QualityLevel=0)
+            try:
+                post(path+'/marketorders.ingest',{'Orders':bad})
+                raise AssertionError('Invalid mixed page was silently accepted')
+            except HTTPError as error:
+                with error:
+                    assert error.code==400
+                    assert 'Ордер 50' in json.load(error)['error']
+            with urlopen(base+'/api/private/status',timeout=20) as r: status=json.load(r)
+            assert status['own_orders']==1 and status['last_rejection']['order']==50
+            assert status['last_rejection']['field']=='QualityLevel'
             post('/api/private/stop',{})
             post('/api/app/stop',{})
             assert child.wait(timeout=30)==0, ''.join(lines)
@@ -44,7 +71,9 @@ def check(executable):
             if child.poll() is None: child.kill(); child.wait(timeout=10)
             reader.join(timeout=10);child.stdout.close()
         for path in Path(directory).glob('*.sqlite3*'):path.unlink()
-        return {'frozen_http_sqlite_export_shutdown':'passed','sqlite_cleanup':'passed','game':'not run','aod':'not run'}
+        return {'version':'0.3.1','frozen_http_sqlite_export_shutdown':'passed','sqlite_cleanup':'passed',
+                'all_305_recipes_analyzed_and_returned':'passed','mixed_page_rejection_diagnostic':'passed',
+                'game':'not run','aod':'not run'}
 
 
 if __name__=='__main__':

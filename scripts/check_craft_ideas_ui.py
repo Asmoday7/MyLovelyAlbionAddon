@@ -18,6 +18,8 @@ from albion_trade_desk.transport import HttpClient
 from albion_trade_desk.web import make_server
 
 fixture=CraftIdeasTests('test_signed_sort_both_directions_keeps_missing_values_last');fixture.setUp()
+large_ids=fixture.large_market(priced=True,tier=8)
+fixture.history(504,1,50)
 now=utcnow();end=int(now//3600)*3600
 with fixture.store.connect() as db:
     db.execute('UPDATE quotes SET observed_at=?,received_at=?',(now-10,now-10))
@@ -50,6 +52,7 @@ try:
         server=make_server(fixture.store,0);thread=threading.Thread(target=server.serve_forever);thread.start()
         try:
             subprocess.run(['node','tests/browser_craft_ideas.cjs'],check=True,timeout=100,
-                env={**os.environ,'ALBION_SMOKE_URL':f'http://127.0.0.1:{server.server_port}','ALBION_IDEAS_CALLS':str(calls)})
+                env={**os.environ,'ALBION_SMOKE_URL':f'http://127.0.0.1:{server.server_port}','ALBION_IDEAS_CALLS':str(calls),
+                     'ALBION_IDEAS_LAST_ITEM':large_ids[-1]})
         finally:server.shutdown();thread.join();server.server_close()
 finally:fixture.doCleanups()

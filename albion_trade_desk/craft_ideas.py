@@ -1,9 +1,7 @@
 """Find craft candidates from the catalogue and observed prices, without speculative quality averages."""
 from . import craft_batch
 from .domain import number, utcnow
-from .analytics import SCOPES
 
-MAX_CANDIDATES=300
 CATEGORIES={
     'weapons':('MAIN','2H','OFF'),
     'armor':('HEAD','ARMOR','SHOES'),
@@ -34,12 +32,11 @@ def config(body):
         'focus_return':None,'sales_tax_pct':8,'setup_fee_pct':2.5,'buy_mode':'instant','sell_mode':'order'})
     return {'economics':economics,'category':category,**parsed,'search':str(body.get('search',''))[:150],
         'show':state,'sort':sort,'min_sales':number(body.get('min_sales',10),0,1e12),
-        'min_profit':number(body.get('min_profit',0),0,1e12),
-        'offset':int(number(body.get('offset',0),0,1e6)),'limit':int(number(body.get('limit',12),1,50))}
+        'min_profit':number(body.get('min_profit',0),0,1e12)}
 
 
-def pool(store,cfg,now):
-    e=cfg['economics'];clauses=['1=1'];params=[]
+def pool(store,cfg):
+    clauses=['1=1'];params=[]
     for field in ('tier','enchantment'):
         if cfg[field] is not None:clauses.append(f'i.{field}=?');params.append(cfg[field])
     if cfg['category']!='all':
@@ -49,20 +46,16 @@ def pool(store,cfg,now):
     if cfg['search']:
         clauses.append("instr(replace(i.search,' ',''),?)>0");params.append(''.join(cfg['search'].casefold().split()))
     where=' AND '.join(clauses)
-    source=SCOPES.get(e['scope']);source_sql=' AND q.source IN ('+','.join('?' for _ in source)+')' if source else ''
-    priority=[e['server'],e['sale_city'],now-e['max_age_hours']*3600,now+300,*list(source or ())]
     with store.connect() as db:
-        total=db.execute(f'SELECT COUNT(*) FROM items i JOIN recipes r ON r.item_id=i.id WHERE {where}',params).fetchone()[0]
-        rows=[dict(r) for r in db.execute(f'''SELECT i.id,r.variant,
-            EXISTS(SELECT 1 FROM quotes q WHERE q.item_id=i.id AND q.server=? AND q.location=?
-                AND q.quality BETWEEN 1 AND 4 AND q.observed_at>=? AND q.observed_at<=? {source_sql}) has_price
+        rows=[dict(r) for r in db.execute(f'''SELECT i.id,r.variant
             FROM items i JOIN recipes r ON r.item_id=i.id WHERE {where}
-            ORDER BY has_price DESC,i.name_ru,i.id,r.variant LIMIT ?''',[*priority,*params,MAX_CANDIDATES])]
-    return rows,total
+            ORDER BY i.name_ru,i.id,r.variant''',params)]
+    return rows,len(rows)
 
 
 def computed(store,cfg,candidates,now,all_qualities=True):
     valid=[];errors=[]
+    # Internal batches keep the shopping planner's payload small; every candidate is evaluated.
     for offset in range(0,len(candidates),100):
         lines=[{'item_id':r['id'],'variant':r['variant'],'units':1,'output_quality':1,'line_id':f'idea_{offset+i}'} for i,r in enumerate(candidates[offset:offset+100])]
         body={**cfg['economics'],'lines':lines,'all_qualities':all_qualities}
@@ -77,8 +70,9 @@ def computed(store,cfg,candidates,now,all_qualities=True):
 
 def analyze(store,body,now=None):
     cfg=config(body);now=utcnow() if now is None else now
-    candidates,total=pool(store,cfg,now)
-    batches,errors=computed(store,cfg,candidates,now)
+    with store.read_snapshot() as snapshot:
+        candidates,total=pool(snapshot,cfg)
+        batches,errors=computed(snapshot,cfg,candidates,now)
     best={}
     for batch in batches:
         for line in batch['lines']:
@@ -108,18 +102,19 @@ def analyze(store,body,now=None):
     field='known_sales' if cfg['sort']=='sales_desc' else 'materials_per_unit' if cfg['sort']=='cost_asc' else 'profit'
     descending=cfg['sort'] in ('profit_desc','sales_desc')
     rows.sort(key=lambda r:(r[field] is None,(-r[field] if descending else r[field]) if r[field] is not None else 0,r['item']['id']))
-    visible_total=len(rows);start=cfg['offset']
-    return {'rows':rows[start:start+cfg['limit']],'total':visible_total,'offset':start,'limit':cfg['limit'],
-        'matched_recipes':total,'evaluated_recipes':len(candidates),'evaluated_items':len(best),'candidate_limit':MAX_CANDIDATES,
-        'truncated':total>len(candidates),'counts':counts,'unsupported_recipes':errors,
+    return {'rows':rows,'total':len(rows),
+        'matched_recipes':total,'evaluated_recipes':len(candidates),'evaluated_items':len(best),
+        'counts':counts,'unsupported_recipes':errors,
         'config':{k:v for k,v in cfg.items() if k!='economics'},'economics':cfg['economics']}
 
 
 def refresh(client,body,progress=None):
-    cfg=config(body);now=utcnow();candidates,total=pool(client.store,cfg,now)
-    if not candidates:raise ValueError('В каталоге нет рецептов для выбранных фильтров')
+    cfg=config(body);now=utcnow()
     if progress:progress({'done':0,'total':1,'label':'Собираем материалы выбранных рецептов'})
-    batches,errors=computed(client.store,cfg,candidates,now,all_qualities=False)
+    with client.store.read_snapshot() as snapshot:
+        candidates,total=pool(snapshot,cfg)
+        if not candidates:raise ValueError('В каталоге нет рецептов для выбранных фильтров')
+        batches,errors=computed(snapshot,cfg,candidates,now,all_qualities=False)
     if not batches:raise ValueError('Не удалось прочитать рецепты выбранной категории')
     for batch in batches:batch['config']['all_qualities']=True
     result=craft_batch.refresh_computed(client,batches,progress)

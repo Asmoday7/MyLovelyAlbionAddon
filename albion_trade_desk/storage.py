@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS native_history (
  quality INTEGER NOT NULL, timescale INTEGER NOT NULL, ticks INTEGER NOT NULL,
  quantity INTEGER NOT NULL, silver REAL NOT NULL, received_at REAL NOT NULL, source TEXT NOT NULL,
  PRIMARY KEY(server,location,numeric_id,quality,timescale,ticks,source));
+CREATE INDEX IF NOT EXISTS native_history_item ON native_history(server,location,item_id,quality,ticks);
 CREATE TABLE IF NOT EXISTS user_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS craft_packs (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, config TEXT NOT NULL,
@@ -139,6 +140,14 @@ class Store:
         finally:
             db.close()
 
+    @contextmanager
+    def read_snapshot(self):
+        """Keep nested recipe/history reads on one consistent, read-only connection."""
+        with self.connect() as db:
+            db.execute('PRAGMA query_only=ON')
+            db.execute('BEGIN')
+            yield _ReadSnapshot(db)
+
     def status(self):
         with self.connect() as db:
             result = {t: db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
@@ -150,3 +159,12 @@ class Store:
     def settings(self):
         with self.connect() as db:
             return {r["name"]: json.loads(r["value"]) for r in db.execute("SELECT * FROM saved_filters")}
+
+
+class _ReadSnapshot:
+    def __init__(self, db):
+        self.db = db
+
+    @contextmanager
+    def connect(self):
+        yield self.db

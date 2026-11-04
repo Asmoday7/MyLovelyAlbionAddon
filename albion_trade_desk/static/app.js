@@ -6,7 +6,8 @@ let crafting = null;
 let marketView = null;
 let marketNames = {};
 let cardLayout = true;
-const fmt = value => value == null ? '—' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1}).format(value);
+const numberFormat = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1});
+const fmt = value => value == null ? '—' : numberFormat.format(value);
 const date = value => value ? new Date(value * 1000).toLocaleString('ru-RU') : 'нет данных';
 const state = {offset: 0, limit: 50, rows: [], selected: new Set(), sort: 'name', direction: 'asc', total: 0, catalog: null, busy: false, activeJob: null, privateEnabled: false};
 const keys = ['server', 'city', 'quality', 'tier', 'enchantment', 'category', 'scope', 'search', 'max_age_hours', 'favorites', 'priced'];
@@ -163,6 +164,8 @@ function renderPrivate(p) {
   $('private-region').textContent = `Сервер сессии: ${(p.server || $('server').value).toUpperCase()}. Сервер игры: ${p.detected_server || 'не передаётся в HTTP AOD; проверьте в окне клиента'}`;
   $('server').disabled = state.busy || p.enabled || p.process?.active;
   $('private-error').textContent = p.last_error || '';
+  $('private-rejection').hidden = !p.last_rejection;
+  $('private-rejection').textContent = p.last_rejection ? `Последний отклонённый пакет (${date(p.last_rejection.at)}): ${p.last_rejection.message}. Пакет не сохранён; уже принятые данные остаются в базе.` : '';
   $('private-start').disabled = p.enabled || p.process?.active;
   $('private-last').textContent = `Последний пакет: ${date(p.last_received_at)}${p.last_topic ? ' · ' + p.last_topic : ''}`;
   $('private-launcher').disabled = !p.enabled; $('private-start').disabled = p.enabled || p.process?.active; $('private-stop').disabled = !p.enabled && !p.process?.active;

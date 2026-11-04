@@ -2,7 +2,7 @@
 import tempfile
 import unittest
 from unittest.mock import patch
-from urllib.parse import parse_qs,urlsplit
+from urllib.parse import parse_qs,urlsplit,unquote
 from albion_trade_desk import craft_ideas,craft_batch,feeds
 from albion_trade_desk.catalog import import_catalog
 from albion_trade_desk.storage import Store
@@ -30,6 +30,17 @@ class CraftIdeasTests(unittest.TestCase):
             'MarketHistories':[{'Timestamp':(end-21600)*10000000+621355968000000000,'ItemAmount':qty,'SilverAmount':qty*10000000}]},'east')
 
     def analyze(self,**kw):return craft_ideas.analyze(self.store,{'city':'1002','sale_city':'1002','show':'all',**kw},NOW)
+
+    def large_market(self,priced=False,tier=4):
+        ids=[f'T{tier}_MAIN_TEST_{i:03}' for i in range(305)]
+        import_catalog(self.store,[{'UniqueName':uid,'Index':200+i,
+            'LocalizedNames':{'RU-RU':f'Тест {i:03}'}} for i,uid in enumerate(ids)])
+        with self.store.connect() as db:
+            db.executemany('INSERT INTO recipes SELECT ?,variant,output,focus,silver,resources FROM recipes WHERE item_id=?',
+                [(uid,STAFF) for uid in ids])
+        if priced:
+            for uid in ids:add_price(self.store,uid,1000)
+        return ids
 
     def test_all_frames_visible_masterpiece_not_averaged_and_no_premium_fees_applied(self):
         r=next(r for r in self.analyze()['rows'] if r['item']['id']==STAFF)
@@ -101,11 +112,78 @@ class CraftIdeasTests(unittest.TestCase):
         self.assertEqual(progress[-1]['done'],progress[-1]['total'])
         self.assertEqual(result['candidates'],1)
 
-    def test_candidate_limit_is_explicit_and_prefers_existing_prices(self):
-        with patch('albion_trade_desk.craft_ideas.MAX_CANDIDATES',2):report=self.analyze()
-        self.assertTrue(report['truncated']);self.assertEqual(report['evaluated_recipes'],2)
-        self.assertGreater(report['matched_recipes'],2)
-        self.assertNotIn(BOOK,[r['item']['id'] for r in report['rows']])
+    def test_full_market_returns_all_candidates_and_ranks_late_variants(self):
+        ids=self.large_market(priced=True)
+        add_price(self.store,ids[-1],100000)
+        self.history(504,1,50)
+        with self.store.connect() as db:
+            # The best variant and an invalid recipe both lie beyond the former 300-recipe cutoff.
+            db.execute('INSERT INTO recipes SELECT item_id,1,2,focus,silver,resources FROM recipes WHERE item_id=?',(ids[-1],))
+            db.execute("UPDATE recipes SET resources='[]' WHERE item_id=?",(ids[-2],))
+        report=self.analyze(limit=8)
+        self.assertEqual(report['matched_recipes'],310)
+        self.assertEqual(report['evaluated_recipes'],310)
+        self.assertEqual(report['evaluated_items'],308)
+        self.assertEqual(report['total'],308)
+        self.assertEqual(len(report['rows']),308)
+        best=report['rows'][0]
+        self.assertEqual(best['item']['id'],ids[-1]);self.assertEqual(best['variant'],1)
+        self.assertTrue(best['recommended'])
+        self.assertEqual([(r['id'],r['variant']) for r in report['unsupported_recipes']],[(ids[-2],0)])
+        tail=self.analyze(offset=300,limit=50,sort='profit_asc')
+        self.assertEqual(tail['total'],308);self.assertEqual(len(tail['rows']),308)
+        self.assertIn(ids[-1],[r['item']['id'] for r in tail['rows']])
+        self.assertEqual(tail['counts'],report['counts'])
+
+    def test_full_market_counts_unpriced_recipes_without_hiding_missing_data(self):
+        ids=self.large_market()
+        report=self.analyze(show='missing',offset=300,limit=50)
+        self.assertEqual(report['evaluated_recipes'],309)
+        self.assertEqual(report['matched_recipes'],309)
+        self.assertEqual(report['counts']['missing'],306)  # All 305 unpriced items and the masterpiece-only book.
+        self.assertEqual(report['total'],306)
+        self.assertEqual(len(report['rows']),306)
+        self.assertIn(ids[-1],[r['item']['id'] for r in report['rows']])
+        self.assertTrue(all(r['profit'] is None and not r['recommended'] for r in report['rows']))
+
+    def test_full_market_refresh_includes_late_outputs_and_deduplicates_shared_inputs(self):
+        ids=self.large_market()
+        class Client:
+            store=self.store
+            def __init__(self):self.urls=[]
+            def get(self,url,ttl=900):self.urls.append(url);return []
+        client=Client();progress=[]
+        with patch('albion_trade_desk.craft_ideas.utcnow',return_value=NOW):
+            report=craft_ideas.refresh(client,{'city':'1002'},progress.append)
+        self.assertEqual(report['candidates'],309);self.assertEqual(report['matched_recipes'],309)
+        self.assertEqual(report['unsupported'],0)
+        for kind in ('prices','history'):
+            for q in range(1,6):
+                fetched=[uid for url in client.urls if f'/{kind}/' in url and parse_qs(urlsplit(url).query)['qualities']==[str(q)]
+                    for uid in unquote(urlsplit(url).path.rsplit('/',1)[-1]).removesuffix('.json').split(',')]
+                self.assertTrue(set(ids).issubset(fetched))
+                self.assertIn(STAFF,fetched)
+                if kind=='prices':
+                    self.assertEqual(len(fetched),len(set(fetched)))
+                    self.assertEqual(fetched.count(MATERIALS[0]),1 if q==1 else 0)
+        self.assertEqual(progress[-1]['done'],progress[-1]['total'])
+
+    def test_analysis_uses_one_snapshot_and_sees_new_prices_on_the_next_run(self):
+        original=craft_batch.plan
+        changed=False
+        def incoming_price(store,body,now):
+            nonlocal changed
+            if not changed:
+                add_price(self.store,HELM,100,observed=NOW)
+                changed=True
+            return original(store,body,now)
+        with patch('albion_trade_desk.craft_ideas.craft_batch.plan',side_effect=incoming_price):
+            before=self.analyze()
+        self.assertEqual(before['rows'][0]['item']['id'],HELM)
+        after=self.analyze()
+        helmet=next(r for r in after['rows'] if r['item']['id']==HELM)
+        self.assertLess(helmet['profit'],0)
+        self.assertEqual(after['rows'][0]['item']['id'],STAFF)
 
     def test_all_quality_batch_preserves_quantities_and_exports_without_selecting_a_frame(self):
         p=craft_batch.plan(self.store,{'city':'1002','all_qualities':True,'no_focus_return':0,

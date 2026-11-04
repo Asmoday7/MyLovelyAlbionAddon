@@ -136,7 +136,7 @@ def plan(store, body, now=None):
     totals = defaultdict(lambda: Decimal(0))
     material_rows, line_rows = {}, []
     for line in cfg['lines']:
-        recipe = crafting.plan(store, {**cfg, **line}, now)
+        recipe = crafting.plan(store, {**cfg, **line}, now, include_variants=False)
         costs, return_value, missing = Decimal(0), Decimal(0), 0
         with store.connect() as db:
             for resource in recipe['resources']:

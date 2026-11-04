@@ -21,6 +21,16 @@ HELLDEN_MARKETS = {"0000-HellDen": "7", "1000-HellDen": "1002", "2000-HellDen": 
                    "4000-HellDen": "4002", "5000-HellDen": "5003"}
 
 
+class MarketOrderError(ValueError):
+    """Public validation context, without raw packets, player fields or session URLs."""
+    def __init__(self, message, index, field, item_id=None):
+        self.details = {'order': index+1, 'field': field}
+        if item_id is not None:
+            self.details['item_id'] = item_id
+        label = f'Ордер {index+1}' + (f' ({item_id})' if item_id else '')
+        super().__init__(f'{label}, {field}: {message}')
+
+
 def utcnow():
     return datetime.now(timezone.utc).timestamp()
 

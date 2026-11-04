@@ -2,13 +2,16 @@
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import threading
 import uuid
 from pathlib import Path
-from .domain import region, utcnow
+from .domain import region, utcnow, MarketOrderError
 from .feeds import ingest
 from .aod_process import AodProcess
+
+LOG = logging.getLogger(__name__)
 
 WARNING = ("Эксперимент: разрешение Sandbox Interactive на приватный режим не подтверждено. "
            "Отсутствие внешней отправки с настоящим Windows-клиентом ещё не проверено. "
@@ -21,6 +24,7 @@ class PrivateScanner:
         self.lock = threading.RLock()
         self.process = AodProcess(store)
         self.token, self.session = None, None
+        self.last_rejection = None
         with store.connect() as db:
             db.execute("UPDATE private_sessions SET stopped_at=? WHERE stopped_at IS NULL", (utcnow(),))
 
@@ -36,6 +40,7 @@ class PrivateScanner:
             self.process = AodProcess(self.store)
             self.session = uuid.uuid4().hex
             self.token = secrets.token_urlsafe(32)
+            self.last_rejection = None
             with self.store.connect() as db:
                 db.execute("INSERT INTO private_sessions(id,server,started_at) VALUES(?,?,?)",
                            (self.session, server, utcnow()))
@@ -85,6 +90,7 @@ class PrivateScanner:
             result['orders_processed'] = result.get('orders_processed', 0)
             result['unique_orders'] = db.execute("SELECT COUNT(*) FROM orders WHERE source='private-client' AND server=?", (result.get('server','east'),)).fetchone()[0]
             result['last_error'] = process.get('error')
+            result['last_rejection'] = dict(self.last_rejection) if self.last_rejection else None
             result["own_orders"] = db.execute("SELECT COUNT(*) FROM orders WHERE source='private-client'").fetchone()[0]
             result["own_native_history"] = db.execute("SELECT COUNT(*) FROM native_history WHERE source='private-client'").fetchone()[0]
             result["unmapped_history"] = db.execute("SELECT COUNT(*) FROM native_history WHERE source='private-client' AND item_id IS NULL").fetchone()[0]
@@ -115,20 +121,26 @@ class PrivateScanner:
             with self.store.connect() as db:
                 prior = db.execute("SELECT last_received_at FROM feed_batches WHERE session_id=? AND server=? AND source=? AND digest=?",
                                    (self.session, server, "private-client", key)).fetchone()
-            if prior and now - prior[0] < 300:
+            duplicate = bool(prior and now - prior[0] < 300)
+            try:
+                if not duplicate or topic == 'marketorders.ingest':
+                    count = ingest(self.store, topic, payload, server, observed_at=observed_at)
+            except (ValueError, KeyError, TypeError, OverflowError) as exc:
+                # AOD's HTTP uploader hides the response body. Keep the reason locally,
+                # without logging the session URL, entire packet or arbitrary field values.
+                details = exc.details if isinstance(exc,MarketOrderError) else {}
+                message = str(exc) if isinstance(exc,MarketOrderError) else 'Пакет отклонён: некорректные рыночные данные'
+                self.last_rejection = {'at':now,'message':message,**details}
+                LOG.warning('Локальный пакет рынка отклонён: %s',message)
+                with self.store.connect() as db:
+                    db.execute("UPDATE private_sessions SET rejected=rejected+1 WHERE id=?", (self.session,))
+                raise
+            if duplicate:
                 # An identical rescan still refreshes last_seen without multiplying quantities.
-                if topic == 'marketorders.ingest':
-                    ingest(self.store, topic, payload, server, observed_at=observed_at)
                 with self.store.connect() as db:
                     db.execute("UPDATE private_sessions SET packets=packets+1,duplicates=duplicates+1,orders_processed=orders_processed+?,last_received_at=?,last_topic=? WHERE id=?",
                                (processed, now, topic, self.session))
                 return {"accepted": 0, "duplicate": True}
-            try:
-                count = ingest(self.store, topic, payload, server, observed_at=observed_at)
-            except (ValueError, KeyError, TypeError, OverflowError):
-                with self.store.connect() as db:
-                    db.execute("UPDATE private_sessions SET rejected=rejected+1 WHERE id=?", (self.session,))
-                raise
             with self.store.connect() as db:
                 db.execute("DELETE FROM feed_batches WHERE last_received_at<?", (now-300,))
                 db.execute("INSERT OR REPLACE INTO feed_batches VALUES(?,?,?,?,?)", (self.session, server, "private-client", key, now))

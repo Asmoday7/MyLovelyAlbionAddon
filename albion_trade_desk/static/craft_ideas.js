@@ -1,13 +1,13 @@
 import {qualitySummary,profitRange,salesText} from './craft_summary.js';
 export function createCraftIdeas({api,el,fmt,showError,job,context,applyContext,addSelection,getReturn,setReturn}){
   const $=id=>document.getElementById(id),key='albion-craft-ideas-v1';
-  const s={data:null,offset:0,sequence:0,initialized:false,downloading:false,publicEnabled:false,lastCheck:0,revision:null};
+  const s={data:null,sequence:0,initialized:false,analyzing:false,pending:false,downloading:false,publicEnabled:false,lastCheck:0,revision:null};
   const controls=['ideas-tier','ideas-enchantment','ideas-category','ideas-search','ideas-show','ideas-sort','ideas-min-sales'];
   function persist(){localStorage.setItem(key,JSON.stringify(Object.fromEntries(controls.map(id=>[id,$(id).value]))));}
   function sync(){const c=context();$('ideas-city').value=c.city;$('ideas-sale-city').value=c.sale_city;$('ideas-scope').value=c.scope;$('ideas-return').value=getReturn()??0;}
   function body(){return {...context(),tier:$('ideas-tier').value,enchantment:$('ideas-enchantment').value,
     category:$('ideas-category').value,search:$('ideas-search').value,show:$('ideas-show').value,sort:$('ideas-sort').value,
-    min_sales:Number($('ideas-min-sales').value||0),no_focus_return:Number(getReturn()??0),offset:s.offset,limit:8};}
+    min_sales:Number($('ideas-min-sales').value||0),no_focus_return:Number(getReturn()??0)};}
   function downloadLabel(){if(!s.downloading)$('ideas-update').textContent=s.publicEnabled?'Обновить цены и продажи':'Включить общие цены и обновить';}
   function updateContext(data){
     s.publicEnabled=data.public_api_enabled;downloadLabel();
@@ -20,8 +20,8 @@ export function createCraftIdeas({api,el,fmt,showError,job,context,applyContext,
     $('ideas-assumptions').textContent=`Без Focus · Налог без Premium 8% + размещение 2.5% · Возврат ${fmt(p.economics.no_focus_return)}% · ${p.economics.scope==='private'?'Мои наблюдения':p.economics.scope==='public'?'Общие данные':'Данные выбранных источников'}`;
     $('ideas-counts').replaceChildren();
     for(const [label,count] of [['С прибылью и продажами',p.counts.recommended],['С положительной оценкой',p.counts.profit],['Не хватает данных',p.counts.missing]])$('ideas-counts').append(el('span',`${label}: ${fmt(count)}`));
-    $('ideas-coverage').textContent=`Проверено рецептов: ${fmt(p.evaluated_recipes)} из ${fmt(p.matched_recipes)} · разных предметов: ${fmt(p.evaluated_items)}.`+(p.truncated?' Выборка ограничена: уточните тир, чары или категорию.':'')+(p.unsupported_recipes.length?` Пропущено недоступных рецептов: ${p.unsupported_recipes.length}.`:'');
-    $('ideas-results').replaceChildren();
+    $('ideas-coverage').textContent=`Проверено рецептов: ${fmt(p.evaluated_recipes)} из ${fmt(p.matched_recipes)} · разных предметов: ${fmt(p.evaluated_items)}.`+(p.unsupported_recipes.length?` Пропущено недоступных рецептов: ${p.unsupported_recipes.length}.`:'');
+    const cards=document.createDocumentFragment();
     for(const row of p.rows){
       const card=el('article',null,'craft-opportunity');card.dataset.itemId=row.item.id;
       const info=el('div',null,'opportunity-info');
@@ -42,34 +42,38 @@ export function createCraftIdeas({api,el,fmt,showError,job,context,applyContext,
         $('ideas-feedback').textContent=`Добавлено в закупку: ${row.item.name_ru} × ${amount.value}. Можно продолжить подбор.`;
       }catch(e){showError(e);$('ideas-feedback').textContent=e.message;}finally{add.disabled=false;}};
       actions.append(amount,add);if(row.suggested_limit!=null&&row.suggested_limit>0)actions.append(el('small',`Ориентир по известным продажам: до ${fmt(row.suggested_limit)} шт.`));
-      info.append(actions);card.append(info,qualitySummary(row.qualities,{el,fmt}));$('ideas-results').append(card);
+      info.append(actions);card.append(info,qualitySummary(row.qualities,{el,fmt}));cards.append(card);
     }
+    $('ideas-results').replaceChildren(cards);
     $('ideas-empty').hidden=p.rows.length>0;
-    $('ideas-prev').disabled=s.offset===0;$('ideas-next').disabled=s.offset+p.rows.length>=p.total;
-    $('ideas-page').textContent=p.total?`${s.offset+1}–${s.offset+p.rows.length} из ${fmt(p.total)}`:'0 предложений';
   }
-  async function analyze(reset=true){
-    if(s.downloading)return;if(reset)s.offset=0;
-    const sequence=++s.sequence;persist();$('ideas-find').disabled=true;$('ideas-feedback').textContent='Сравниваем рецепты по вашей базе…';
+  async function analyze(){
+    if(s.downloading)return;
+    const sequence=++s.sequence;persist();
+    if(s.analyzing){s.pending=true;return;}
+    s.analyzing=true;$('ideas-find').disabled=true;$('ideas-update').disabled=true;$('ideas-feedback').textContent='Сравниваем все подходящие рецепты по вашей базе…';
     try{
       const request=body(),data=await api('/api/craft/ideas',request);if(sequence!==s.sequence)return;
-      if(request.offset&&request.offset>=data.total){s.offset=0;await analyze(false);return;}
       s.data=data;s.lastBody=JSON.stringify(request);draw();$('ideas-feedback').textContent=data.counts.recommended?`Подходящих по известным ценам и продажам: ${data.counts.recommended}.`:'Можно загрузить цены и продажи прямо здесь. Отсутствующие данные не считаются нулевыми.';
     }catch(e){if(sequence===s.sequence){showError(e);$('ideas-feedback').textContent=e.detail||e.message;}}
-    finally{if(sequence===s.sequence)$('ideas-find').disabled=false;}
+    finally{
+      s.analyzing=false;
+      if(s.pending){s.pending=false;await analyze();}
+      else{$('ideas-find').disabled=s.downloading;$('ideas-update').disabled=s.downloading;}
+    }
   }
   async function open(){
     sync();$('ideas-return').value=getReturn()??0;
     if(!s.initialized){s.initialized=true;try{const saved=JSON.parse(localStorage.getItem(key));for(const id of controls)if(saved?.[id]!=null)$(id).value=saved[id];}catch{} }
-    await analyze(false);
+    await analyze();
   }
   async function poll(force=false){
-    if(!s.initialized||s.downloading)return;
+    if(!s.initialized||s.downloading||s.analyzing)return;
     if($('craft-ideas').contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;
     force=force||s.lastBody!==JSON.stringify(body());
     if(!force&&Date.now()-s.lastCheck<10000)return;s.lastCheck=Date.now();
     const rev=JSON.stringify(await api('/api/craft/ideas/revision'));
-    if(force||s.revision!==rev){s.revision=rev;sync();await analyze(false);}
+    if(force||s.revision!==rev){s.revision=rev;sync();await analyze();}
   }
   for(const id of controls.filter(id=>id!=='ideas-search'))$(id).onchange=()=>analyze();
   let debounce;$('ideas-search').oninput=()=>{clearTimeout(debounce);debounce=setTimeout(()=>analyze(),280);};
@@ -78,7 +82,6 @@ export function createCraftIdeas({api,el,fmt,showError,job,context,applyContext,
   };
   $('ideas-return').onchange=async()=>{try{await setReturn(Number($('ideas-return').value||0));await analyze();}catch(e){showError(e);}};
   $('ideas-find').onclick=()=>analyze();$('ideas-show-all').onclick=()=>{$('ideas-show').value='all';analyze();};
-  $('ideas-prev').onclick=()=>{s.offset=Math.max(0,s.offset-8);analyze(false);};$('ideas-next').onclick=()=>{s.offset+=8;analyze(false);};
   $('ideas-to-shopping').onclick=()=>$('batch-workspace').scrollIntoView({block:'start',behavior:'smooth'});
   document.addEventListener('albion-job-progress',event=>{if(s.downloading&&event.detail.kind==='craft-ideas'){
     const p=event.detail.progress;$('ideas-feedback').textContent=`${p.label} · ${p.done}/${p.total}`;
@@ -92,7 +95,7 @@ export function createCraftIdeas({api,el,fmt,showError,job,context,applyContext,
       await job('/api/craft/ideas/refresh',request);
       const after=context();
       if(['server','city','sale_city'].every(k=>before[k]===after[k]))await applyContext({...after,scope:'all'});
-      s.downloading=false;sync();await analyze(false);
+      s.downloading=false;sync();await analyze();
       $('ideas-feedback').textContent='Цены материалов, готовых вещей и продажи всех рамок обновлены. Собственные наблюдения не отправлялись.';
     }catch(e){showError(e);$('ideas-feedback').textContent=e.detail||e.message;}
     finally{s.downloading=false;for(const node of inputs)node.disabled=false;downloadLabel();if(s.data)draw();}

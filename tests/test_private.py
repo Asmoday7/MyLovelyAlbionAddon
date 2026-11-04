@@ -67,6 +67,51 @@ class PrivateTests(unittest.TestCase):
         with self.store.connect() as db:
             self.assertEqual(db.execute("SELECT source FROM orders").fetchone()[0], 'private-client')
 
+    def test_mixed_50_order_page_is_accepted_without_item_selection(self):
+        self.scanner.start('east',True)
+        rows=[]
+        for i in range(50):
+            row=dict(orders()['Orders'][0],Id=100+i,
+                ItemTypeId=['T4_BAG','T4_RUNE','T4_SKILLBOOK_STANDARD'][i%3],
+                QualityLevel=1 if i%3 else i%5+1)
+            rows.append(row)
+        payload={'Orders':rows}
+        self.assertEqual(self.scanner.receive('east',self.scanner.token,'marketorders.ingest',payload)['accepted'],50)
+        self.assertEqual(self.store.status()['orders'],50)
+        self.assertIsNone(self.scanner.status()['last_rejection'])
+
+    def test_rejected_mixed_page_reports_exact_record_without_partial_commit_or_private_values(self):
+        self.scanner.start('east',True)
+        self.scanner.receive('east',self.scanner.token,'marketorders.ingest',orders())
+        rows=[dict(orders()['Orders'][0],Id=100+i) for i in range(50)]
+        rows[-1].update(ItemTypeId='T4_RUNE',QualityLevel=0)
+        with self.assertLogs('albion_trade_desk.private_scanner',level='WARNING') as logs:
+            with self.assertRaisesRegex(ValueError,'Ордер 50 .*T4_RUNE.*QualityLevel.*получено 0'):
+                self.scanner.receive('east',self.scanner.token,'marketorders.ingest',{'Orders':rows})
+        rejection=self.scanner.status()['last_rejection']
+        self.assertEqual((rejection['order'],rejection['field'],rejection['item_id']),(50,'QualityLevel','T4_RUNE'))
+        self.assertEqual(self.store.status()['orders'],1)
+        self.assertEqual(self.scanner.status()['rejected'],1)
+        self.assertNotIn(self.scanner.token,' '.join(logs.output))
+        self.assertNotIn('Orders',rejection['message'])
+        # Another field with arbitrary text must never be echoed in diagnostics.
+        bad=orders();bad['Orders'][0]['UnitPriceSilver']='private-input-marker'
+        with self.assertRaises(ValueError):self.scanner.receive('east',self.scanner.token,'marketorders.ingest',bad)
+        self.assertNotIn('private-input-marker',json.dumps(self.scanner.status()['last_rejection']))
+        # Valid later packets continue to be accepted, keeping the last rejection for diagnosis.
+        self.assertEqual(self.scanner.receive('east',self.scanner.token,'marketorders.ingest',orders(2000000))['accepted'],1)
+        self.scanner.stop();self.scanner.start('east',True)
+        self.assertIsNone(self.scanner.status()['last_rejection'])
+
+    def test_identity_conflict_reports_position_and_rolls_back_earlier_records(self):
+        self.scanner.start('east',True)
+        self.scanner.receive('east',self.scanner.token,'marketorders.ingest',orders())
+        rows=[dict(orders()['Orders'][0],Id=99),dict(orders()['Orders'][0],ItemTypeId='T4_RUNE')]
+        with self.assertRaisesRegex(ValueError,'Ордер 2 .*T4_RUNE.*конфликтует'):
+            self.scanner.receive('east',self.scanner.token,'marketorders.ingest',{'Orders':rows})
+        self.assertEqual(self.store.status()['orders'],1)
+        self.assertEqual(self.scanner.status()['last_rejection']['field'],'Id')
+
     def test_wrong_region_bad_token_old_session_stopped_session_rejected(self):
         self.scanner.start('east', True)
         token = self.scanner.token

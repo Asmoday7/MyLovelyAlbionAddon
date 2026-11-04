@@ -97,7 +97,7 @@ def n(value):
     return int(value) if value == int(value) else float(value)
 
 
-def plan(store, body, now=None):
+def plan(store, body, now=None, *, include_variants=True):
     cfg, now = config(body), utcnow() if now is None else now
     with store.connect() as db:
         item = db.execute('SELECT * FROM items WHERE id=?',(cfg['item_id'],)).fetchone()
@@ -145,7 +145,7 @@ def plan(store, body, now=None):
             value=quote(db,cfg,cfg['item_id'],cfg['sale_city'],q,output_kind,now)
             output_options.append({'quality':q,'quotes':{output_kind:value} if value else {}})
         output_quote=fallback_quotes(output_options).get(output_kind)
-        return {'config':cfg,'item':item_info(item,cfg['item_id']),'variants':variants(db,family(cfg['item_id'])),
+        return {'config':cfg,'item':item_info(item,cfg['item_id']),'variants':variants(db,family(cfg['item_id'])) if include_variants else [],
                 'recipe_variants':[{'variant':r['variant'],'output':r['output']} for r in recipes],
                 'operations':operations,'produced':n(produced),'overproduction':n(produced-Decimal(cfg['units'])),
                 'resources':rows,'ready_count':ready,'resource_count':len(rows),

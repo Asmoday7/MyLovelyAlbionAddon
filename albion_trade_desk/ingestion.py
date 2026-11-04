@@ -1,6 +1,6 @@
 """Validated market inputs. A partial scan is never a complete order book."""
 import re
-from .domain import region, quality, location, number, timestamp, utcnow
+from .domain import region, quality, location, number, timestamp, utcnow, MarketOrderError
 
 
 def rebuild_order_quotes(db, server, groups, source, now):
@@ -97,7 +97,7 @@ def local_orders(store, payload, server="east", source="data-client", scaled=Tru
         raise ValueError("Orders должен быть массивом")
     with store.connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        for row in rows:
+        for index,row in enumerate(rows):
             side = row["AuctionType"]
             if side not in ("offer", "request"):
                 raise ValueError("Неизвестный AuctionType")
@@ -114,7 +114,7 @@ def local_orders(store, payload, server="east", source="data-client", scaled=Tru
             previous = db.execute("SELECT item_id,location,quality,side FROM orders WHERE server=? AND id=? AND source=?",
                                   (server, str(row["Id"]), source)).fetchone()
             if previous and tuple(previous) != (uid, city, q, side):
-                raise ValueError("Идентификатор ордера конфликтует с предметом, рынком или качеством")
+                raise MarketOrderError("Идентификатор ордера конфликтует с предметом, рынком или качеством",index,'Id',uid)
             changed = db.execute("""INSERT INTO orders
                 (server,id,item_id,location,quality,side,price,amount,expires,received_at,source,
                  raw_location,market_type,enchantment,observed_at,first_seen_at)

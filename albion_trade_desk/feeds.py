@@ -1,6 +1,6 @@
 """Market-only protocol adapters. No uplink, no private/personalized topics."""
 from . import ingestion
-from .domain import region, quality, location, number, timestamp, utcnow
+from .domain import region, quality, location, number, timestamp, utcnow, MarketOrderError
 
 SOURCES = ("private-client", "aodp-nats")
 
@@ -19,22 +19,31 @@ def validate_orders(payload):
         raise ValueError("Ожидается market-only объект Orders")
     fields = {"Id", "ItemTypeId", "ItemGroupTypeId", "LocationId", "QualityLevel", "EnchantmentLevel",
               "UnitPriceSilver", "Amount", "AuctionType", "Expires"}
-    for row in payload["Orders"]:
+    for index,row in enumerate(payload["Orders"]):
         if not isinstance(row, dict) or set(row) - fields:
-            raise ValueError("Неподдерживаемые или персональные поля в market order")
-        uid = row["ItemTypeId"]
+            raise MarketOrderError("Неподдерживаемые или персональные поля в market order",index,'Orders')
+        uid = row.get("ItemTypeId")
         if not isinstance(uid, str) or not 1 <= len(uid) <= 150 or not all(c.isalnum() or c in "_@-" for c in uid):
-            raise ValueError("Некорректный ItemTypeId")
-        if not location(row["LocationId"]) or len(str(row["LocationId"])) > 150:
-            raise ValueError("Некорректный LocationId")
-        quality(integer(row["QualityLevel"]))
-        integer(row["Id"])
-        integer(row["Amount"])
-        integer(row.get("EnchantmentLevel", 0), 4)
-        if row["AuctionType"] not in ("offer", "request"):
-            raise ValueError("Неизвестный AuctionType")
-        number(row["UnitPriceSilver"])
-        timestamp(row["Expires"])
+            raise MarketOrderError("Некорректный ItemTypeId",index,'ItemTypeId')
+        checks = [
+            ('LocationId',lambda v: v is not None and bool(location(v)) and len(str(v))<=150,'Некорректный LocationId'),
+            ('QualityLevel',lambda v: bool(quality(integer(v))),'Качество должно быть от 1 до 5'),
+            ('Id',lambda v: integer(v)>=0,'Ожидается неотрицательный целый ID'),
+            ('Amount',lambda v: integer(v)>=0,'Количество должно быть целым и неотрицательным'),
+            ('EnchantmentLevel',lambda v: integer(v,4)>=0,'Зачарование должно быть целым от 0 до 4'),
+            ('AuctionType',lambda v: v in ('offer','request'),'Неизвестный AuctionType'),
+            ('UnitPriceSilver',lambda v: number(v)>=0,'Некорректная цена'),
+            ('Expires',lambda v: timestamp(v) is not None,'Некорректное время окончания ордера'),
+        ]
+        for field,check,message in checks:
+            value=None
+            try:
+                value=row.get(field,0) if field=='EnchantmentLevel' else row[field]
+                if not check(value):raise ValueError(message)
+            except (ValueError,KeyError,TypeError,OverflowError) as exc:
+                if field in ('QualityLevel','EnchantmentLevel') and type(value) is int and -10000<=value<=10000:
+                    message+=f' (получено {value})'
+                raise MarketOrderError(message,index,field,uid) from exc
 
 
 def market_history(store, payload, server, source, scaled=True, observed_at=None):
